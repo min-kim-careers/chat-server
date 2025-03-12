@@ -10,6 +10,4 @@ RUN go mod download
 
 COPY ./app .
 
-EXPOSE 8080
-
 ENTRYPOINT [ "air", "-c", ".air.toml"]
