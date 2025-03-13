@@ -8,18 +8,6 @@ import (
 )
 
 func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *Hub) {
-	query := r.URL.Query()
-	id := query.Get("client")
-	if id == "" {
-		log.Println("Client ID not provided. Disconnecting.")
-		return
-	}
-
-	if hub.ClientExists(id) {
-		log.Printf("Client <%s> already exists in hub. Disconnecting.", id)
-		return
-	}
-
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
@@ -27,11 +15,27 @@ func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *Hub)
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
+		log.Println("Disconnecting client.")
 		conn.Close()
 		return
 	}
-	log.Printf("Successfully upgraded connection for <%s>\n", id)
+	log.Printf("Successfully upgraded connection for <%s>", conn.RemoteAddr())
 
-	client := NewClient(id, conn)
-	hub.AddClient(client)
+	_, msgJson, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Error receiving message on connect:", err)
+		log.Println("Disconnecting client.")
+		conn.Close()
+		return
+	}
+
+	connMsg := Deserialize(msgJson)
+	if connMsg == nil {
+		log.Println("Disconnecting client.")
+		conn.Close()
+		return
+	}
+
+	hub.HandleConnection(connMsg, conn)
+
 }
