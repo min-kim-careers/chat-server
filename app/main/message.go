@@ -11,6 +11,7 @@ type (
 	ItemID         string
 	TargetID       string
 	MessageContent string
+	Timestamp      string
 )
 
 var validMessageTypes = map[MessageType]bool{
@@ -29,15 +30,17 @@ type Message struct {
 	RoomID         RoomID         `json:"room_id"`
 	ClientID       ClientID       `json:"client_id"`
 	MessageContent MessageContent `json:"message_content"`
+	Timestamp      Timestamp      `json:"timestamp"`
 }
 
-func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent MessageContent) *Message {
+func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent MessageContent, timestamp Timestamp) *Message {
 	m := Message{}
 
 	m.MessageType = messageType
 	m.RoomID = roomID
 	m.ClientID = clientID
 	m.MessageContent = messageContent
+	m.Timestamp = timestamp
 
 	return &m
 }
