@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"log"
@@ -11,20 +11,20 @@ type ClientID string
 type Client struct {
 	id      ClientID
 	conn    *websocket.Conn
-	channel chan []byte
+	channel chan *Message
 }
 
-func NewClient(id ClientID, conn *websocket.Conn) *Client {
+func NewClient(id ClientID, wsConn *websocket.Conn) *Client {
 	c := Client{}
 
 	c.id = id
-	c.conn = conn
-	c.channel = make(chan []byte)
+	c.conn = wsConn
+	c.channel = make(chan *Message)
 
 	return &c
 }
 
-func (c *Client) Read(r *Room) {
+func (c *Client) read(r *Room) {
 	for {
 		_, msgJson, err := c.conn.ReadMessage()
 		if err != nil {
@@ -33,17 +33,18 @@ func (c *Client) Read(r *Room) {
 			c.conn.Close()
 			return
 		}
-		msg := Deserialize(msgJson)
+		msg := DeserializeMessage(msgJson)
 
-		if msg.MessageType == "chat" {
-			log.Printf("Message read from client <%s>: %s", c.id, msg.MessageContent)
-			r.broadcast <- msgJson
+		if msg.Type == "chat" {
+			log.Printf("Message read from client <%s>: %s", c.id, msg.Content)
+			r.broadcast <- msg
 		}
 	}
 }
 
-func (c *Client) Send(r *Room) {
-	for msgJson := range c.channel {
+func (c *Client) send(r *Room) {
+	for msg := range c.channel {
+		msgJson := SerializeMessage(msg)
 		err := c.conn.WriteMessage(websocket.TextMessage, msgJson)
 		if err != nil {
 			log.Printf("Error sending message by client <%s>: %s", c.id, err)
@@ -51,12 +52,11 @@ func (c *Client) Send(r *Room) {
 			c.conn.Close()
 			return
 		}
-		msg := Deserialize(msgJson)
-		log.Printf("Message sent to client <%s>: %s", c.id, msg.MessageContent)
+		log.Printf("Message sent to client <%s>: %s", c.id, msg.Content)
 	}
 }
 
 func (c *Client) Run(r *Room) {
-	go c.Read(r)
-	go c.Send(r)
+	go c.read(r)
+	go c.send(r)
 }

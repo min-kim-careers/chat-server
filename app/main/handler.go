@@ -4,38 +4,40 @@ import (
 	"log"
 	"net/http"
 
+	"chat-go/main/chat"
+
 	"github.com/gorilla/websocket"
 )
 
-func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *Hub) {
+func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	wsConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
 		log.Println("Disconnecting client.")
-		conn.Close()
+		wsConn.Close()
 		return
 	}
-	log.Printf("Successfully upgraded connection for <%s>", conn.RemoteAddr())
+	log.Printf("Successfully upgraded connection for <%s>", wsConn.RemoteAddr())
 
-	_, msgJson, err := conn.ReadMessage()
+	_, msgJson, err := wsConn.ReadMessage()
 	if err != nil {
 		log.Println("Error receiving message on connect:", err)
 		log.Println("Disconnecting client.")
-		conn.Close()
+		wsConn.Close()
 		return
 	}
 
-	connMsg := Deserialize(msgJson)
-	if connMsg == nil {
+	wsConnMsg := chat.DeserializeMessage(msgJson)
+	if wsConnMsg == nil {
 		log.Println("Disconnecting client.")
-		conn.Close()
+		wsConn.Close()
 		return
 	}
 
-	hub.HandleConnection(connMsg, conn)
+	hub.HandleWsConnection(wsConnMsg, wsConn)
 
 }

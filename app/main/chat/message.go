@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"bytes"
@@ -26,44 +26,44 @@ var validMessageTypes = map[MessageType]bool{
 }
 
 type Message struct {
-	MessageType    MessageType    `json:"message_type"`
-	RoomID         RoomID         `json:"room_id"`
-	ClientID       ClientID       `json:"client_id"`
-	MessageContent MessageContent `json:"message_content"`
-	Timestamp      Timestamp      `json:"timestamp"`
+	Type      MessageType    `json:"message_type"`
+	RoomID    RoomID         `json:"room_id"`
+	ClientID  ClientID       `json:"client_id"`
+	Content   MessageContent `json:"message_content"`
+	Timestamp Timestamp      `json:"timestamp"`
 }
 
 func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent MessageContent, timestamp Timestamp) *Message {
 	m := Message{}
 
-	m.MessageType = messageType
+	m.Type = messageType
 	m.RoomID = roomID
 	m.ClientID = clientID
-	m.MessageContent = messageContent
+	m.Content = messageContent
 	m.Timestamp = timestamp
 
 	return &m
 }
 
-func Deserialize(jsonData []byte) *Message {
-	var m Message
+func DeserializeMessage(jsonData []byte) *Message {
+	var msg Message
 
-	err := json.Unmarshal(jsonData, &m)
+	err := json.Unmarshal(jsonData, &msg)
 	if err != nil {
 		log.Println("Error deserializing message")
 		return nil
 	}
 
-	_, valid := validMessageTypes[m.MessageType]
+	_, valid := validMessageTypes[msg.Type]
 	if !valid {
-		log.Println("Invalid message type:", m.MessageType)
+		log.Println("Invalid message type:", msg.Type)
 		return nil
 	}
 
-	return &m
+	return &msg
 }
 
-func Serialize(m *Message) []byte {
+func SerializeMessage(m *Message) []byte {
 	data, err := json.Marshal(m)
 	if err != nil {
 		log.Println("Error serializing message")
@@ -73,7 +73,7 @@ func Serialize(m *Message) []byte {
 	return data
 }
 
-func printMessage(m *Message) {
+func PrintMessage(m *Message) {
 	res, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		log.Println("Error printing message:", err)
@@ -82,7 +82,7 @@ func printMessage(m *Message) {
 	log.Println(res)
 }
 
-func prettyJson(j []byte) {
+func PrintJson(j []byte) {
 	var buffer bytes.Buffer
 	err := json.Indent(&buffer, j, "", "\t")
 	if err != nil {

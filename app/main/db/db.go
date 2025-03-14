@@ -1,23 +1,17 @@
 package db
 
 import (
+	"chat-go/main/chat"
 	"context"
 	"fmt"
 	"log"
 	"os"
 
-	"github.com/jackc/pgx/v5"
-)
+	"chat-app/main/chat"
 
-var dbQuery = `
-CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    sender VARCHAR(255) NOT NULL,
-    receiver VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-`
+	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 func getDBConnStr() string {
 	dbUser := os.Getenv("DB_USER")
@@ -33,20 +27,48 @@ func getDBConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
 }
 
-func InitDB() (*pgx.Conn, error) {
-	connStr := getDBConnStr()
+func createMessagesTable(dbpool *pgxpool.Conn) {
+	query := `
+	CREATE TABLE IF NOT EXISTS messages (
+		id SERIAL PRIMARY KEY,
+		sender VARCHAR(255) NOT NULL,
+		receiver VARCHAR(255) NOT NULL,
+		content TEXT NOT NULL,
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+	`
 
-	conn, err := pgx.Connect(context.Background(), connStr)
-	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
-		return nil, err
-	}
-
-	_, err = conn.Exec(context.Background(), dbQuery)
+	_, err = dbpool.Exec(context.Background(), query)
 	if err != nil {
 		log.Fatalf("Failed to apply schema: %v", err)
 		return nil, err
 	}
+}
 
-	return conn, nil
+func InitDB() (*pgxpool.Conn, error) {
+	dbConnStr := getDBConnStr()
+
+	dbpool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
+		os.Exit(1)
+	}
+	defer dbpool.Close()
+
+	var greeting string
+	err = dbpool.QueryRow(context.Background(), "select 'Hello, world!'").Scan(&greeting)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println(greeting)
+
+	
+
+	return dbpool, nil
+}
+
+func AddMessage(dbConn *pgx.Conn, msg *chat.Message) {
+	dbConn.
 }

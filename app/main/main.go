@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat-go/main/chat"
 	"chat-go/main/db"
 	"context"
 	"flag"
@@ -13,21 +14,21 @@ var addr = flag.String("addr", ":8080", "http service address")
 func main() {
 
 	// Initialise Database
-	conn, err := db.InitDB()
+	dbConn, err := db.InitDB()
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v", err)
 		return
 	}
-	defer conn.Close(context.Background())
+	defer dbConn.Close(context.Background())
 	log.Println("DB init successful")
 
 	// Initialise Websocket
 	flag.Parse()
 
-	hub := NewHub()
+	hub := chat.NewHub(dbConn)
 	log.Println("Hub created.")
 
-	go hub.Run()
+	hub.Run()
 	log.Println("Hub running.")
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
