@@ -5,6 +5,11 @@ go 1.23.6
 require github.com/gorilla/websocket v1.5.3
 
 require (
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+)
+
+require (
 	github.com/gorilla/schema v1.4.1
 	github.com/stretchr/testify v1.10.0 // indirect
 )

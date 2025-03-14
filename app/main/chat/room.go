@@ -1,7 +1,9 @@
-package main
+package chat
 
 import (
 	"log"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type RoomID string
@@ -11,22 +13,24 @@ type Room struct {
 	clients    map[ClientID]*Client
 	register   chan *Client
 	unregister chan *Client
-	broadcast  chan []byte
+	broadcast  chan *Message
+	dbConn     *pgx.Conn
 }
 
-func NewRoom(id RoomID) *Room {
+func NewRoom(id RoomID, dbConn *pgx.Conn) *Room {
 	r := Room{}
 
 	r.id = id
 	r.clients = make(map[ClientID]*Client)
 	r.register = make(chan *Client)
 	r.unregister = make(chan *Client)
-	r.broadcast = make(chan []byte)
+	r.broadcast = make(chan *Message)
+	r.dbConn = dbConn
 
 	return &r
 }
 
-func (r *Room) Run(h *Hub) {
+func (r *Room) handleRegistrations(h *Hub) {
 	for {
 		select {
 		case c := <-r.register:
@@ -40,14 +44,29 @@ func (r *Room) Run(h *Hub) {
 			}
 
 			if len(r.clients) == 0 {
-				log.Printf("Room <%s> is empty.", r.id)
+				log.Printf("Room <%s> is empty. Requesting removal from hub.", r.id)
 				h.unregister <- r
-			}
-
-		case msg := <-r.broadcast:
-			for _, c := range r.clients {
-				c.channel <- msg
+				return
 			}
 		}
 	}
+}
+
+func (r *Room) handleBroadcasts() {
+	for msg := range r.broadcast {
+		for _, c := range r.clients {
+			if msg.ClientID != c.id {
+				select {
+				case c.channel <- msg:
+				default:
+					log.Printf("Client <%s> message buffer full, dropping message.", c.id)
+				}
+			}
+		}
+	}
+}
+
+func (r *Room) Run(h *Hub) {
+	go r.handleRegistrations(h)
+	go r.handleBroadcasts()
 }
