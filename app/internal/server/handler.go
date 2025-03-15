@@ -1,10 +1,9 @@
-package main
+package server
 
 import (
+	"chat-go/internal/chat"
 	"log"
 	"net/http"
-
-	"chat-go/main/chat"
 
 	"github.com/gorilla/websocket"
 )
