@@ -16,7 +16,11 @@ func main() {
 	newDB := chat.NewDB()
 	newDB.CreateMessageTable()
 	defer newDB.Pool.Close()
-	log.Println("DB init successful")
+	log.Println("DB init successful.")
+
+	newCache := chat.NewCache()
+	defer newCache.Client.Close()
+	log.Println("Cache init successful.")
 
 	// Initialising Websocket
 	flag.Parse()
@@ -31,7 +35,7 @@ func main() {
 		server.HandleWebsocketConnection(w, r, newHub)
 	})
 
-	log.Printf("Websocket server starting on %s", *addr)
+	log.Printf("Websocket server starting on %s.", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 
 }
