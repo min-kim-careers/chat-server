@@ -2,6 +2,8 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -16,17 +18,18 @@ type Cache struct {
 }
 
 func NewCache() *Cache {
-	c := Cache{}
-	c.Client = newRedisClient()
-	return &c
+	cache := Cache{}
+	cache.Client = initCacheClient()
+	return &cache
 }
 
-func newRedisClient() *redis.Client {
-	redisAddr := os.Getenv("REDIS_ADDR")
+func initCacheClient() *redis.Client {
+	redisHost := os.Getenv("REDIS_HOST")
+	redisPort := os.Getenv("REDIS_PORT")
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDBStr := os.Getenv("REDIS_DB")
 
-	if redisAddr == "" || redisPassword == "" || redisDBStr == "" {
+	if redisHost == "" || redisPort == "" || redisPassword == "" || redisDBStr == "" {
 		log.Fatal("Missing required Redis environment variables")
 	}
 
@@ -35,16 +38,24 @@ func newRedisClient() *redis.Client {
 		log.Fatal("Invalid REDIS_DB value:", err)
 	}
 
-	return redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
+	client := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", redisHost, redisPort),
 		Password: redisPassword,
 		DB:       redisDB,
 	})
+
+	_, err = client.Ping(cacheCtx).Result()
+	if err != nil {
+		log.Fatal("Could not connect to Redis:", err)
+	}
+	log.Println("Connected to Redis.")
+
+	return client
 }
 
-func (cache *Cache) CacheMessageHistory(msg *Message) {
+func (cache *Cache) SetMessageHistory(msg *Message) {
 	msgJson := SerializeMessage(msg)
-	err := cache.Client.Set(cacheCtx, string(msg.RoomID), msgJson, 0)
+	err := cache.Client.Set(cacheCtx, string(msg.RoomID), msgJson, 0).Err()
 	if err != nil {
 		log.Printf("Failed to cache message history for room <%s>: %v", msg.RoomID, err)
 	} else {
@@ -52,12 +63,21 @@ func (cache *Cache) CacheMessageHistory(msg *Message) {
 	}
 }
 
-func (cache *Cache) GetMessageHistory(roomID RoomID) (msgHistory []*Message) {
-	err := cache.Client.Get(cacheCtx, string(roomID))
+func (cache *Cache) GetMessageHistory(roomID RoomID) ([]*Message, error) {
+	val, err := cache.Client.Get(cacheCtx, string(roomID)).Result()
 	if err != nil {
 		log.Printf("Failed to get message history for room <%s> from cache: %v", roomID, err)
-	} else {
-		log.Printf("Fetched message history for room <%s> from cache.", roomID)
+		return nil, err
 	}
-	return make([]*Message, 0)
+
+	var history []*Message
+
+	err = json.Unmarshal([]byte(val), &history)
+	if err != nil {
+		log.Printf("Failed to unmarshal message history for room <%s>: %v", roomID, err)
+		return nil, err
+	}
+
+	log.Printf("Fetched message history for room <%s> from cache.", roomID)
+	return history, nil
 }
