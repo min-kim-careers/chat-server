@@ -8,18 +8,20 @@ import (
 
 type Hub struct {
 	db         *DB
+	cache      *Cache
 	rooms      map[RoomID]*Room
 	register   chan *Room
 	unregister chan *Room
 }
 
-func NewHub(db *DB) *Hub {
-	h := Hub{}
-	h.db = db
-	h.rooms = make(map[RoomID]*Room)
-	h.register = make(chan *Room)
-	h.unregister = make(chan *Room)
-	return &h
+func NewHub(db *DB, cache *Cache) *Hub {
+	return &Hub{
+		db:         db,
+		cache:      cache,
+		rooms:      make(map[RoomID]*Room),
+		register:   make(chan *Room),
+		unregister: make(chan *Room),
+	}
 }
 
 func (hub *Hub) HandleWsConnection(wsConnMsg *Message, wsConn *websocket.Conn) {
@@ -27,28 +29,18 @@ func (hub *Hub) HandleWsConnection(wsConnMsg *Message, wsConn *websocket.Conn) {
 	if roomExists {
 		log.Printf("Room <%s> found in hub.", wsConnMsg.RoomID)
 	} else {
-		newRoom := NewRoom(wsConnMsg.RoomID, hub)
+		newRoom := NewRoom(wsConnMsg.RoomID)
 		log.Printf("Room <%s> created.", wsConnMsg.RoomID)
 		hub.register <- newRoom
 		room = newRoom
 
-		newRoom.Run(hub)
+		room.Run(hub)
 	}
 
-	_, clientExists := room.clients[wsConnMsg.ClientID]
-	if clientExists {
-		log.Printf("Client <%s> already in room. Disconnecting.", wsConnMsg.ClientID)
-		wsConn.Close()
-		return
-	}
-	newClient := NewClient(wsConnMsg.ClientID, wsConn)
-	log.Printf("Client <%s> created.", wsConnMsg.ClientID)
-	room.register <- newClient
-
-	newClient.Run(room)
+	room.AddClient(wsConnMsg.ClientID, wsConn, hub.cache)
 }
 
-func (hub *Hub) handleRegistrations() {
+func (hub *Hub) HandleRegistrations() {
 	for {
 		select {
 
@@ -67,5 +59,5 @@ func (hub *Hub) handleRegistrations() {
 }
 
 func (hub *Hub) Run() {
-	go hub.handleRegistrations()
+	go hub.HandleRegistrations()
 }

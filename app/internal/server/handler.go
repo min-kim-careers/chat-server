@@ -15,8 +15,7 @@ func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat
 
 	wsConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Error upgrading connection:", err)
-		log.Println("Disconnecting client.")
+		log.Printf("Error upgrading connection: %v", err)
 		wsConn.Close()
 		return
 	}
@@ -24,15 +23,13 @@ func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat
 
 	_, msgJson, err := wsConn.ReadMessage()
 	if err != nil {
-		log.Println("Error receiving message on connect:", err)
-		log.Println("Disconnecting client.")
+		log.Printf("Error receiving message on connect: %v", err)
 		wsConn.Close()
 		return
 	}
 
-	wsConnMsg := chat.DeserializeMessage(msgJson)
-	if wsConnMsg == nil {
-		log.Println("Disconnecting client.")
+	wsConnMsg, err := chat.DeserializeMessage(msgJson)
+	if err != nil {
 		wsConn.Close()
 		return
 	}

@@ -2,6 +2,8 @@ package chat
 
 import (
 	"log"
+
+	"github.com/gorilla/websocket"
 )
 
 type RoomID string
@@ -11,22 +13,24 @@ type Room struct {
 	clients    map[ClientID]*Client
 	register   chan *Client
 	unregister chan *Client
-	broadcast  chan *Message
-	hub        *Hub
 }
 
-func NewRoom(id RoomID, hub *Hub) *Room {
-	r := Room{}
-	r.id = id
-	r.clients = make(map[ClientID]*Client)
-	r.register = make(chan *Client)
-	r.unregister = make(chan *Client)
-	r.broadcast = make(chan *Message)
-	r.hub = hub
-	return &r
+func NewRoom(id RoomID) *Room {
+	return &Room{
+		id:         id,
+		clients:    make(map[ClientID]*Client),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+	}
 }
 
-func (room *Room) handleRegistrations() {
+func (room *Room) AddClient(clientID ClientID, wsConn *websocket.Conn, cache *Cache) {
+	newClient := NewClient(clientID, room.id, wsConn, cache)
+	room.register <- newClient
+	newClient.Run(room)
+}
+
+func (room *Room) HandleRegistrations(hub *Hub) {
 	for {
 		select {
 		case c := <-room.register:
@@ -41,29 +45,13 @@ func (room *Room) handleRegistrations() {
 
 			if len(room.clients) == 0 {
 				log.Printf("Room <%s> is empty. Requesting removal from hub.", room.id)
-				room.hub.unregister <- room
+				hub.unregister <- room
 				return
 			}
 		}
 	}
 }
 
-func (room *Room) handleBroadcasts() {
-	for msg := range room.broadcast {
-		room.hub.db.AddMessage(msg)
-		for _, c := range room.clients {
-			if msg.ClientID != c.id {
-				select {
-				case c.channel <- msg:
-				default:
-					log.Printf("Client <%s> message channel full, dropping message.", c.id)
-				}
-			}
-		}
-	}
-}
-
-func (room *Room) Run(h *Hub) {
-	go room.handleRegistrations()
-	go room.handleBroadcasts()
+func (room *Room) Run(hub *Hub) {
+	go room.HandleRegistrations(hub)
 }

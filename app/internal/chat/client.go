@@ -9,52 +9,63 @@ import (
 type ClientID string
 
 type Client struct {
-	id      ClientID
-	conn    *websocket.Conn
-	channel chan *Message
+	id     ClientID
+	wsConn *websocket.Conn
+	cache  *Cache
 }
 
-func NewClient(id ClientID, wsConn *websocket.Conn) *Client {
-	c := Client{}
-	c.id = id
-	c.conn = wsConn
-	c.channel = make(chan *Message)
-	return &c
+func NewClient(id ClientID, roomID RoomID, wsConn *websocket.Conn, cache *Cache) *Client {
+	return &Client{
+		id:     id,
+		wsConn: wsConn,
+		cache:  cache,
+	}
 }
 
-func (client *Client) read(r *Room) {
+// Send to client
+func (client *Client) Send(room *Room) {
+	streams := client.cache.GetReadStreams(string(room.id))
+	if streams == nil {
+		return
+	}
+
+	for _, stream := range streams {
+		for _, msg := range stream.Messages {
+			msgJson, ok := msg.Values["message"]
+			if !ok {
+				log.Println("No message in stream message:", msg)
+				continue
+			}
+
+			msg, err := DeserializeMessage(msgJson.([]byte))
+			if err != nil || msg.ClientID == client.id {
+				continue
+			}
+
+			err = client.wsConn.WriteMessage(websocket.TextMessage, msgJson.([]byte))
+			if err != nil {
+				log.Printf("Error sending message to client <%s>: %v", client.id, err)
+			} else {
+				log.Printf("Sent message to client <%s>: %v", client.id, msg)
+			}
+		}
+	}
+}
+
+// Read from client
+func (client *Client) Read(room *Room) {
 	for {
-		_, msgJson, err := client.conn.ReadMessage()
+		_, msgJson, err := client.wsConn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message from client <%s>: %s", client.id, err)
-			r.unregister <- client
-			client.conn.Close()
-			return
+			log.Printf("Error reading message from client <%s>: %v", client.id, err)
+			continue
 		}
-		msg := DeserializeMessage(msgJson)
 
-		if msg.Type == "chat" {
-			log.Printf("Message read from client <%s>: %s", client.id, msg.Content)
-			r.broadcast <- msg
-		}
+		client.cache.AddToStream(string(room.id), string(msgJson))
 	}
 }
 
-func (client *Client) send(r *Room) {
-	for msg := range client.channel {
-		msgJson := SerializeMessage(msg)
-		err := client.conn.WriteMessage(websocket.TextMessage, msgJson)
-		if err != nil {
-			log.Printf("Error sending message by client <%s>: %s", client.id, err)
-			r.unregister <- client
-			client.conn.Close()
-			return
-		}
-		log.Printf("Message sent to client <%s>: %s", client.id, msg.Content)
-	}
-}
-
-func (client *Client) Run(r *Room) {
-	go client.read(r)
-	go client.send(r)
+func (client *Client) Run(room *Room) {
+	go client.Read(room)
+	go client.Send(room)
 }

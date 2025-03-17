@@ -3,6 +3,7 @@ package chat
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"log"
 )
 
@@ -34,43 +35,41 @@ type Message struct {
 }
 
 func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent MessageContent, timestamp Timestamp) *Message {
-	m := Message{}
-
-	m.Type = messageType
-	m.RoomID = roomID
-	m.ClientID = clientID
-	m.Content = messageContent
-	m.Timestamp = timestamp
-
-	return &m
+	return &Message{
+		Type:      messageType,
+		RoomID:    roomID,
+		ClientID:  clientID,
+		Content:   messageContent,
+		Timestamp: timestamp,
+	}
 }
 
-func DeserializeMessage(jsonData []byte) *Message {
+func DeserializeMessage(jsonData []byte) (*Message, error) {
 	var msg Message
 
 	err := json.Unmarshal(jsonData, &msg)
 	if err != nil {
 		log.Println("Error deserializing message")
-		return nil
+		return nil, err
 	}
 
 	_, valid := validMessageTypes[msg.Type]
 	if !valid {
 		log.Println("Invalid message type:", msg.Type)
-		return nil
+		return nil, errors.New("invalid message type: " + string(msg.Type))
 	}
 
-	return &msg
+	return &msg, nil
 }
 
-func SerializeMessage(m *Message) []byte {
+func SerializeMessage(m *Message) ([]byte, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		log.Println("Error serializing message")
-		return nil
+		return nil, err
 	}
 
-	return data
+	return data, nil
 }
 
 func PrintMessage(m *Message) {
@@ -89,5 +88,5 @@ func PrintJson(j []byte) {
 		log.Println("Error prettifying JSON:", j)
 		return
 	}
-	log.Println(buffer)
+	log.Println(buffer.String())
 }
