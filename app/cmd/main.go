@@ -11,25 +11,24 @@ import (
 var addr = flag.String("addr", ":8080", "http service address")
 
 func main() {
-
-	// Initialising Database
+	// Database
 	newDB := chat.NewDB()
 	newDB.CreateMessageTable()
-	defer newDB.Pool.Close()
 	log.Println("DB init successful.")
 
+	// Cache
 	newCache := chat.NewCache()
-	defer newCache.Client.Close()
 	log.Println("Cache init successful.")
 
-	// Initialising Websocket
-	flag.Parse()
-
-	newHub := chat.NewHub(newDB)
+	// Hub
+	newHub := chat.NewHub(newDB, newCache)
 	log.Println("Hub created.")
 
 	newHub.Run()
 	log.Println("Hub running.")
+
+	// Websocket
+	flag.Parse()
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
 		server.HandleWebsocketConnection(w, r, newHub)
@@ -37,5 +36,4 @@ func main() {
 
 	log.Printf("Websocket server starting on %s.", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
-
 }

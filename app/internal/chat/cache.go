@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,33 +13,33 @@ import (
 var cacheCtx = context.Background()
 
 type Cache struct {
-	Client *redis.Client
+	client *redis.Client
 }
 
 func NewCache() *Cache {
-	cache := Cache{}
-	cache.Client = initCacheClient()
-	return &cache
+	return &Cache{
+		client: initCacheClient(),
+	}
 }
 
 func initCacheClient() *redis.Client {
-	redisHost := os.Getenv("REDIS_HOST")
-	redisPort := os.Getenv("REDIS_PORT")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-	redisDBStr := os.Getenv("REDIS_DB")
+	cacheHost := os.Getenv("CACHE_HOST")
+	cachePort := os.Getenv("CACHE_PORT")
+	cachePassword := os.Getenv("CACHE_PASSWORD")
+	cacheDBStr := os.Getenv("CACHE_DB")
 
-	if redisHost == "" || redisPort == "" || redisPassword == "" || redisDBStr == "" {
+	if cacheHost == "" || cachePort == "" || cachePassword == "" || cacheDBStr == "" {
 		log.Fatal("Missing required Redis environment variables")
 	}
 
-	redisDB, err := strconv.Atoi(redisDBStr)
+	redisDB, err := strconv.Atoi(cacheDBStr)
 	if err != nil {
-		log.Fatal("Invalid REDIS_DB value:", err)
+		log.Fatalf("Invalid %s value: %v", cacheDBStr, err)
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", redisHost, redisPort),
-		Password: redisPassword,
+		Addr:     fmt.Sprintf("%s:%s", cacheHost, cachePort),
+		Password: cachePassword,
 		DB:       redisDB,
 	})
 
@@ -53,31 +52,35 @@ func initCacheClient() *redis.Client {
 	return client
 }
 
-func (cache *Cache) SetMessageHistory(msg *Message) {
-	msgJson := SerializeMessage(msg)
-	err := cache.Client.Set(cacheCtx, string(msg.RoomID), msgJson, 0).Err()
+func (cache *Cache) AddToStream(roomID string, msgJson string) {
+	key := "chat:room:" + roomID
+
+	_, err := cache.client.XAdd(cacheCtx, &redis.XAddArgs{
+		Stream: key,
+		Values: map[string]string{
+			"message": msgJson,
+		},
+	}).Result()
 	if err != nil {
-		log.Printf("Failed to cache message history for room <%s>: %v", msg.RoomID, err)
-	} else {
-		log.Printf("Cached message history for room <%s>.", msg.RoomID)
+		log.Printf("Error adding message to stream <%s>: %v", key, err)
+		return
 	}
+
+	log.Printf("Message sent to stream <%s>.", key)
 }
 
-func (cache *Cache) GetMessageHistory(roomID RoomID) ([]*Message, error) {
-	val, err := cache.Client.Get(cacheCtx, string(roomID)).Result()
+func (cache *Cache) GetReadStreams(roomID string) []redis.XStream {
+	key := "chat:room:" + roomID
+
+	streams, err := cache.client.XRead(cacheCtx, &redis.XReadArgs{
+		Streams: []string{key, "$"},
+		Count:   1,
+		Block:   0,
+	}).Result()
 	if err != nil {
-		log.Printf("Failed to get message history for room <%s> from cache: %v", roomID, err)
-		return nil, err
+		log.Printf("Error reading message from stream <%s>: %v", key, err)
+		return nil
 	}
 
-	var history []*Message
-
-	err = json.Unmarshal([]byte(val), &history)
-	if err != nil {
-		log.Printf("Failed to unmarshal message history for room <%s>: %v", roomID, err)
-		return nil, err
-	}
-
-	log.Printf("Fetched message history for room <%s> from cache.", roomID)
-	return history, nil
+	return streams
 }
