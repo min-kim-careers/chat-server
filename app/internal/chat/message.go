@@ -3,7 +3,6 @@ package chat
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"log"
 )
 
@@ -44,32 +43,33 @@ func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messa
 	}
 }
 
-func DeserializeMessage(jsonData []byte) (*Message, error) {
+func DeserializeMessage(jsonData []byte) *Message {
 	var msg Message
 
 	err := json.Unmarshal(jsonData, &msg)
 	if err != nil {
-		log.Println("Error deserializing message")
-		return nil, err
+		log.Println("Error deserializing message:", string(jsonData))
+		log.Println(err)
+		return nil
 	}
 
 	_, valid := validMessageTypes[msg.Type]
 	if !valid {
 		log.Println("Invalid message type:", msg.Type)
-		return nil, errors.New("invalid message type: " + string(msg.Type))
+		return nil
 	}
 
-	return &msg, nil
+	return &msg
 }
 
-func SerializeMessage(m *Message) ([]byte, error) {
+func SerializeMessage(m *Message) []byte {
 	data, err := json.Marshal(m)
 	if err != nil {
-		log.Println("Error serializing message")
-		return nil, err
+		log.Println("Error serializing message:", err)
+		return nil
 	}
 
-	return data, nil
+	return data
 }
 
 func PrintMessage(m *Message) {

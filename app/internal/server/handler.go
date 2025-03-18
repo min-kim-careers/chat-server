@@ -28,8 +28,8 @@ func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat
 		return
 	}
 
-	wsConnMsg, err := chat.DeserializeMessage(msgJson)
-	if err != nil {
+	wsConnMsg := chat.DeserializeMessage(msgJson)
+	if wsConnMsg == nil {
 		wsConn.Close()
 		return
 	}

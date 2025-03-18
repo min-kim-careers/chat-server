@@ -31,18 +31,24 @@ func (client *Client) Send(room *Room) {
 
 	for _, stream := range streams {
 		for _, msg := range stream.Messages {
-			msgJson, ok := msg.Values["message"]
+			msgInterface, ok := msg.Values["message"]
 			if !ok {
 				log.Println("No message in stream message:", msg)
 				continue
 			}
 
-			msg, err := DeserializeMessage(msgJson.([]byte))
-			if err != nil || msg.ClientID == client.id {
+			msgJson := []byte(msgInterface.(string))
+
+			msg := DeserializeMessage(msgJson)
+			if msg == nil {
 				continue
 			}
 
-			err = client.wsConn.WriteMessage(websocket.TextMessage, msgJson.([]byte))
+			if msg.ClientID == client.id {
+				continue
+			}
+
+			err := client.wsConn.WriteMessage(websocket.TextMessage, msgJson)
 			if err != nil {
 				log.Printf("Error sending message to client <%s>: %v", client.id, err)
 			} else {
