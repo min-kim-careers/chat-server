@@ -24,20 +24,19 @@ func NewHub(db *DB, cache *Cache) *Hub {
 	}
 }
 
-func (hub *Hub) HandleWsConnection(wsConnMsg *Message, wsConn *websocket.Conn) {
-	room, roomExists := hub.rooms[RoomID(wsConnMsg.RoomID)]
-	if roomExists {
-		log.Printf("Room <%s> found in hub.", wsConnMsg.RoomID)
-	} else {
-		newRoom := NewRoom(wsConnMsg.RoomID)
-		log.Printf("Room <%s> created.", wsConnMsg.RoomID)
+func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *Message) {
+	room, roomExists := hub.rooms[RoomID(connMsg.RoomID)]
+	if !roomExists {
+		newRoom := NewRoom(connMsg.RoomID, hub.cache)
+		log.Printf("Room <%s> created.", connMsg.RoomID)
 		hub.register <- newRoom
 		room = newRoom
-
 		room.Run(hub)
+	} else {
+		log.Printf("Room <%s> found in hub.", connMsg.RoomID)
 	}
 
-	room.AddClient(wsConnMsg.ClientID, wsConn, hub.cache)
+	room.AddClient(wsConn, connMsg.ClientID)
 }
 
 func (hub *Hub) HandleRegistrations() {
@@ -53,7 +52,6 @@ func (hub *Hub) HandleRegistrations() {
 				delete(hub.rooms, room.id)
 				log.Printf("Room <%s> unregistered from hub.", room.id)
 			}
-
 		}
 	}
 }

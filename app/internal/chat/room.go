@@ -13,19 +13,21 @@ type Room struct {
 	clients    map[ClientID]*Client
 	register   chan *Client
 	unregister chan *Client
+	cache      *Cache
 }
 
-func NewRoom(id RoomID) *Room {
+func NewRoom(id RoomID, cache *Cache) *Room {
 	return &Room{
 		id:         id,
 		clients:    make(map[ClientID]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		cache:      cache,
 	}
 }
 
-func (room *Room) AddClient(clientID ClientID, wsConn *websocket.Conn, cache *Cache) {
-	newClient := NewClient(clientID, room.id, wsConn, cache)
+func (room *Room) AddClient(wsConn *websocket.Conn, clientID ClientID) {
+	newClient := NewClient(clientID, wsConn)
 	room.register <- newClient
 	newClient.Run(room)
 }
@@ -35,12 +37,12 @@ func (room *Room) HandleRegistrations(hub *Hub) {
 		select {
 		case c := <-room.register:
 			room.clients[c.id] = c
-			log.Printf("Client <%s> registered to room <%s>.", c.id, room.id)
+			log.Printf("Client <%s> connected to room <%s>.", c.id, room.id)
 
 		case c := <-room.unregister:
 			if _, exists := room.clients[c.id]; exists {
 				delete(room.clients, c.id)
-				log.Printf("Client <%s> unregistered from room <%s>.", c.id, room.id)
+				log.Printf("Client <%s> disconnected from room <%s>.", c.id, room.id)
 			}
 
 			if len(room.clients) == 0 {
@@ -52,6 +54,37 @@ func (room *Room) HandleRegistrations(hub *Hub) {
 	}
 }
 
+func (room *Room) HandleClients(hub *Hub) {
+	pubsub := hub.cache.GetPubSub(string(room.id))
+	if pubsub == nil {
+		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", room.id)
+		hub.unregister <- room
+		return
+	}
+	defer pubsub.Close()
+
+	channel := pubsub.Channel()
+
+	for data := range channel {
+		msgJson := []byte(data.Payload)
+
+		msg := DeserializeMessage(msgJson)
+		if msg == nil {
+			log.Printf("Error deserializing message in room <%s>. Message: %s", room.id, msgJson)
+			continue
+		}
+
+		for clientID, client := range room.clients {
+			if clientID == msg.ClientID {
+				continue
+			}
+
+			client.Send(msgJson)
+		}
+	}
+}
+
 func (room *Room) Run(hub *Hub) {
 	go room.HandleRegistrations(hub)
+	go room.HandleClients(hub)
 }

@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -52,35 +53,48 @@ func initCacheClient() *redis.Client {
 	return client
 }
 
-func (cache *Cache) AddToStream(roomID string, msgJson string) {
+func (cache *Cache) GetPubSub(roomID string) *redis.PubSub {
 	key := "chat:room:" + roomID
 
-	_, err := cache.client.XAdd(cacheCtx, &redis.XAddArgs{
-		Stream: key,
-		Values: map[string]string{
-			"message": msgJson,
-		},
-	}).Result()
+	pubsub := cache.client.Subscribe(cacheCtx, key)
+	if pubsub == nil {
+		log.Println("Error subscribing to room: ", key)
+	}
+
+	return pubsub
+}
+
+func (cache *Cache) PublishMessage(roomID string, msgJson []byte) {
+	key := "chat:room:" + roomID
+
+	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
 	if err != nil {
-		log.Printf("Error adding message to stream <%s>: %v", key, err)
+		log.Printf("Error publishing following message to room <%s>: %v", key, err)
 		return
 	}
 
-	log.Printf("Message sent to stream <%s>.", key)
+	_, err = cache.client.RPush(cacheCtx, key, msgJson).Result()
+	if err != nil {
+		log.Printf("Error caching message in room <%s>: %s", roomID, err)
+	}
 }
 
-func (cache *Cache) GetReadStreams(roomID string) []redis.XStream {
+func (cache *Cache) CachedMessages(roomID string, limit int64) []*Message {
 	key := "chat:room:" + roomID
 
-	streams, err := cache.client.XRead(cacheCtx, &redis.XReadArgs{
-		Streams: []string{key, "$"},
-		Count:   1,
-		Block:   0,
-	}).Result()
+	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
 	if err != nil {
-		log.Printf("Error reading message from stream <%s>: %v", key, err)
+		log.Printf("Error getting cached messages for room <%s>: %v", roomID, err)
 		return nil
 	}
 
-	return streams
+	var msgs []*Message
+
+	for _, cachedMsg := range cachedMsgs {
+		var msg Message
+		json.Unmarshal([]byte(cachedMsg), &msg)
+		msgs = append(msgs, &msg)
+	}
+
+	return msgs
 }
