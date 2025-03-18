@@ -10,7 +10,7 @@ type (
 	MessageType    string
 	ItemID         string
 	TargetID       string
-	MessageContent string
+	MessageContent any
 	Timestamp      string
 )
 
@@ -23,6 +23,7 @@ var validMessageTypes = map[MessageType]bool{
 	"typing":     true,
 	"edit":       true,
 	"delete":     true,
+	"restore":    true,
 }
 
 type Message struct {
@@ -33,16 +34,14 @@ type Message struct {
 	Timestamp Timestamp      `json:"timestamp"`
 }
 
-func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent MessageContent, timestamp Timestamp) *Message {
-	m := Message{}
-
-	m.Type = messageType
-	m.RoomID = roomID
-	m.ClientID = clientID
-	m.Content = messageContent
-	m.Timestamp = timestamp
-
-	return &m
+func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent any, timestamp Timestamp) *Message {
+	return &Message{
+		Type:      messageType,
+		RoomID:    roomID,
+		ClientID:  clientID,
+		Content:   messageContent,
+		Timestamp: timestamp,
+	}
 }
 
 func DeserializeMessage(jsonData []byte) *Message {
@@ -50,7 +49,8 @@ func DeserializeMessage(jsonData []byte) *Message {
 
 	err := json.Unmarshal(jsonData, &msg)
 	if err != nil {
-		log.Println("Error deserializing message")
+		log.Println("Error deserializing message:", string(jsonData))
+		log.Println(err)
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func DeserializeMessage(jsonData []byte) *Message {
 func SerializeMessage(m *Message) []byte {
 	data, err := json.Marshal(m)
 	if err != nil {
-		log.Println("Error serializing message")
+		log.Println("Error serializing message:", err)
 		return nil
 	}
 
@@ -89,5 +89,5 @@ func PrintJson(j []byte) {
 		log.Println("Error prettifying JSON:", j)
 		return
 	}
-	log.Println(buffer)
+	log.Println(buffer.String())
 }

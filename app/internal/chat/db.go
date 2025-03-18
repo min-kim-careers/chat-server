@@ -14,13 +14,13 @@ import (
 var dbCtx = context.Background()
 
 type DB struct {
-	Pool *pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
 func NewDB() *DB {
-	db := DB{}
-	db.Pool = initDBPool()
-	return &db
+	return &DB{
+		pool: initDBPool(),
+	}
 }
 
 func initDBPool() *pgxpool.Pool {
@@ -41,7 +41,9 @@ func initDBPool() *pgxpool.Pool {
 		log.Fatal("Missing required database environment variables")
 	}
 
-	dbConfig, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPassword, dbHost, dbPort, dbName))
+	dbConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
+
+	dbConfig, err := pgxpool.ParseConfig(dbConnStr)
 	if err != nil {
 		log.Fatal("Failed to create a config:", err)
 	}
@@ -76,7 +78,7 @@ func initDBPool() *pgxpool.Pool {
 }
 
 func (db *DB) AcquireConn() (*pgxpool.Conn, error) {
-	dbConn, err := db.Pool.Acquire(context.Background())
+	dbConn, err := db.pool.Acquire(context.Background())
 	if err != nil {
 		log.Println("Error acquiring DB connection:", err)
 	}
