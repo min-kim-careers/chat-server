@@ -2,59 +2,76 @@ package chat
 
 import (
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
+const FETCH_LIMIT = 5
+
 type ClientID string
 
 type Client struct {
-	id      ClientID
-	conn    *websocket.Conn
-	channel chan *Message
+	id     ClientID
+	wsConn *websocket.Conn
 }
 
 func NewClient(id ClientID, wsConn *websocket.Conn) *Client {
-	c := Client{}
-	c.id = id
-	c.conn = wsConn
-	c.channel = make(chan *Message)
-	return &c
+	return &Client{
+		id:     id,
+		wsConn: wsConn,
+	}
 }
 
-func (client *Client) read(r *Room) {
+// Send to client
+func (client *Client) Send(msgJson []byte) {
+	err := client.wsConn.WriteMessage(websocket.TextMessage, msgJson)
+	if err != nil {
+		log.Printf("Error sending message to client <%s>: %v", client.id, err)
+	} else {
+		log.Printf("Sent message to client <%s>: %v", client.id, string(msgJson))
+	}
+}
+
+// Read from client
+func (client *Client) Read(room *Room) {
 	for {
-		_, msgJson, err := client.conn.ReadMessage()
+		_, msg, err := client.wsConn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message from client <%s>: %s", client.id, err)
-			r.unregister <- client
-			client.conn.Close()
+			log.Printf("Error reading message from client <%s>: %v", client.id, err)
+			room.unregister <- client
 			return
 		}
-		msg := DeserializeMessage(msgJson)
 
-		if msg.Type == "chat" {
-			log.Printf("Message read from client <%s>: %s", client.id, msg.Content)
-			r.broadcast <- msg
-		}
+		room.cache.PublishMessage(string(room.id), msg)
 	}
 }
 
-func (client *Client) send(r *Room) {
-	for msg := range client.channel {
-		msgJson := SerializeMessage(msg)
-		err := client.conn.WriteMessage(websocket.TextMessage, msgJson)
-		if err != nil {
-			log.Printf("Error sending message by client <%s>: %s", client.id, err)
-			r.unregister <- client
-			client.conn.Close()
-			return
-		}
-		log.Printf("Message sent to client <%s>: %s", client.id, msg.Content)
+func (client *Client) RestoreMessages(room *Room) {
+	msgs := room.cache.CachedMessages(string(room.id), FETCH_LIMIT)
+	if len(msgs) == 0 {
+		return
 	}
+
+	msg := Message{
+		Type:      "restore",
+		RoomID:    room.id,
+		ClientID:  client.id,
+		Content:   msgs,
+		Timestamp: Timestamp(time.Now().Format(time.RFC3339)),
+	}
+
+	msgJson := SerializeMessage(&msg)
+	if msgJson == nil {
+		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", client.id, room.id)
+		return
+	}
+
+	client.Send(msgJson)
 }
 
-func (client *Client) Run(r *Room) {
-	go client.read(r)
-	go client.send(r)
+func (client *Client) Run(room *Room) {
+	client.RestoreMessages(room)
+
+	go client.Read(room)
 }

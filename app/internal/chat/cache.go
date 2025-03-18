@@ -14,33 +14,33 @@ import (
 var cacheCtx = context.Background()
 
 type Cache struct {
-	Client *redis.Client
+	client *redis.Client
 }
 
 func NewCache() *Cache {
-	cache := Cache{}
-	cache.Client = initCacheClient()
-	return &cache
+	return &Cache{
+		client: initCacheClient(),
+	}
 }
 
 func initCacheClient() *redis.Client {
-	redisHost := os.Getenv("REDIS_HOST")
-	redisPort := os.Getenv("REDIS_PORT")
-	redisPassword := os.Getenv("REDIS_PASSWORD")
-	redisDBStr := os.Getenv("REDIS_DB")
+	cacheHost := os.Getenv("CACHE_HOST")
+	cachePort := os.Getenv("CACHE_PORT")
+	cachePassword := os.Getenv("CACHE_PASSWORD")
+	cacheDBStr := os.Getenv("CACHE_DB")
 
-	if redisHost == "" || redisPort == "" || redisPassword == "" || redisDBStr == "" {
+	if cacheHost == "" || cachePort == "" || cachePassword == "" || cacheDBStr == "" {
 		log.Fatal("Missing required Redis environment variables")
 	}
 
-	redisDB, err := strconv.Atoi(redisDBStr)
+	redisDB, err := strconv.Atoi(cacheDBStr)
 	if err != nil {
-		log.Fatal("Invalid REDIS_DB value:", err)
+		log.Fatalf("Invalid %s value: %v", cacheDBStr, err)
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", redisHost, redisPort),
-		Password: redisPassword,
+		Addr:     fmt.Sprintf("%s:%s", cacheHost, cachePort),
+		Password: cachePassword,
 		DB:       redisDB,
 	})
 
@@ -53,31 +53,48 @@ func initCacheClient() *redis.Client {
 	return client
 }
 
-func (cache *Cache) SetMessageHistory(msg *Message) {
-	msgJson := SerializeMessage(msg)
-	err := cache.Client.Set(cacheCtx, string(msg.RoomID), msgJson, 0).Err()
+func (cache *Cache) GetPubSub(roomID string) *redis.PubSub {
+	key := "chat:room:" + roomID
+
+	pubsub := cache.client.Subscribe(cacheCtx, key)
+	if pubsub == nil {
+		log.Println("Error subscribing to room: ", key)
+	}
+
+	return pubsub
+}
+
+func (cache *Cache) PublishMessage(roomID string, msgJson []byte) {
+	key := "chat:room:" + roomID
+
+	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
 	if err != nil {
-		log.Printf("Failed to cache message history for room <%s>: %v", msg.RoomID, err)
-	} else {
-		log.Printf("Cached message history for room <%s>.", msg.RoomID)
+		log.Printf("Error publishing following message to room <%s>: %v", key, err)
+		return
+	}
+
+	_, err = cache.client.RPush(cacheCtx, key, msgJson).Result()
+	if err != nil {
+		log.Printf("Error caching message in room <%s>: %s", roomID, err)
 	}
 }
 
-func (cache *Cache) GetMessageHistory(roomID RoomID) ([]*Message, error) {
-	val, err := cache.Client.Get(cacheCtx, string(roomID)).Result()
+func (cache *Cache) CachedMessages(roomID string, limit int64) []*Message {
+	key := "chat:room:" + roomID
+
+	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
 	if err != nil {
-		log.Printf("Failed to get message history for room <%s> from cache: %v", roomID, err)
-		return nil, err
+		log.Printf("Error getting cached messages for room <%s>: %v", roomID, err)
+		return nil
 	}
 
-	var history []*Message
+	var msgs []*Message
 
-	err = json.Unmarshal([]byte(val), &history)
-	if err != nil {
-		log.Printf("Failed to unmarshal message history for room <%s>: %v", roomID, err)
-		return nil, err
+	for _, cachedMsg := range cachedMsgs {
+		var msg Message
+		json.Unmarshal([]byte(cachedMsg), &msg)
+		msgs = append(msgs, &msg)
 	}
 
-	log.Printf("Fetched message history for room <%s> from cache.", roomID)
-	return history, nil
+	return msgs
 }
