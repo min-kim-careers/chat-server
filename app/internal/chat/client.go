@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const FETCH_LIMIT = 5
+const FETCH_LIMIT = 100
 
 type ClientID string
 
