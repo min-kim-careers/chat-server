@@ -92,8 +92,16 @@ func (cache *Cache) CachedMessages(roomID string, limit int64) []*Message {
 
 	for _, cachedMsg := range cachedMsgs {
 		var msg Message
-		json.Unmarshal([]byte(cachedMsg), &msg)
+		err = json.Unmarshal([]byte(cachedMsg), &msg)
+		if err != nil {
+			log.Println("Error unmarshalling cached messages:", err)
+			return nil
+		}
 		msgs = append(msgs, &msg)
+	}
+
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
 
 	return msgs

@@ -4,14 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type (
 	MessageType    string
 	ItemID         string
 	TargetID       string
-	MessageContent any
 	Timestamp      string
+	MessageContent any
 )
 
 var validMessageTypes = map[MessageType]bool{
@@ -27,21 +29,29 @@ var validMessageTypes = map[MessageType]bool{
 }
 
 type Message struct {
-	Type      MessageType    `json:"message_type"`
-	RoomID    RoomID         `json:"room_id"`
-	ClientID  ClientID       `json:"client_id"`
-	Content   MessageContent `json:"message_content"`
+	Type      MessageType    `json:"message_type" validate:"required"`
+	RoomID    RoomID         `json:"room_id" validate:"required"`
+	ClientID  ClientID       `json:"client_id" validate:"required"`
 	Timestamp Timestamp      `json:"timestamp"`
+	Content   MessageContent `json:"message_content"`
 }
 
-func NewMessage(messageType MessageType, roomID RoomID, clientID ClientID, messageContent any, timestamp Timestamp) *Message {
-	return &Message{
-		Type:      messageType,
-		RoomID:    roomID,
-		ClientID:  clientID,
-		Content:   messageContent,
-		Timestamp: timestamp,
+func validateMessage(msg *Message) bool {
+	validate := validator.New()
+
+	err := validate.Struct(msg)
+	if err != nil {
+		log.Println("Invalid message:", err)
+		return false
 	}
+
+	_, valid := validMessageTypes[msg.Type]
+	if !valid {
+		log.Println("Invalid message type:", msg.Type)
+		return false
+	}
+
+	return true
 }
 
 func DeserializeMessage(jsonData []byte) *Message {
@@ -54,9 +64,7 @@ func DeserializeMessage(jsonData []byte) *Message {
 		return nil
 	}
 
-	_, valid := validMessageTypes[msg.Type]
-	if !valid {
-		log.Println("Invalid message type:", msg.Type)
+	if !validateMessage(&msg) {
 		return nil
 	}
 

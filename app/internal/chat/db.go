@@ -95,8 +95,8 @@ func (db *DB) CreateMessageTable() {
 		message_type VARCHAR(255) NOT NULL,
 		room_id VARCHAR(255) NOT NULL,
 		client_id VARCHAR(255) NOT NULL,
-		message_content TEXT NOT NULL,
 		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		message_content TEXT NOT NULL,
 	)
 	`
 
@@ -115,11 +115,11 @@ func (db *DB) AddMessage(msg *Message) {
 	}
 
 	q := `
-	INSERT INTO messages (message_type, room_id, client_id, message_content, timestamp) 
+	INSERT INTO messages (message_type, room_id, client_id, timestamp, message_content) 
 	VALUES ($1, $2, $3, $4, $5)
 	`
 
-	_, err = dbConn.Exec(dbCtx, q, msg.Type, msg.RoomID, msg.ClientID, msg.Content, msg.Timestamp)
+	_, err = dbConn.Exec(dbCtx, q, msg.Type, msg.RoomID, msg.ClientID, msg.Timestamp, msg.Content)
 	if err != nil {
 		log.Println("Error adding message:", err)
 	} else {
