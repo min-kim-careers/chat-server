@@ -95,8 +95,8 @@ func (db *DB) CreateMessageTable() {
 		message_type VARCHAR(255) NOT NULL,
 		room_id VARCHAR(255) NOT NULL,
 		client_id VARCHAR(255) NOT NULL,
-		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		message_content TEXT NOT NULL,
+		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		message_content TEXT NOT NULL
 	)
 	`
 
