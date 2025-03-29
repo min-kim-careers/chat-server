@@ -107,11 +107,11 @@ func (db *DB) CreateMessageTable() {
 	log.Println("Message table found.")
 }
 
-func (db *DB) AddMessage(msg *Message) {
+func (db *DB) AddMessage(msg *Message) error {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
-		return
+		return err
 	}
 
 	q := `
@@ -125,6 +125,12 @@ func (db *DB) AddMessage(msg *Message) {
 	} else {
 		log.Println("Message added to DB.")
 	}
+	return err
+
+}
+
+func (db *DB) AddMessages(msgs []*Message) {
+
 }
 
 func (db *DB) GetMessageHistory(roomID RoomID) {

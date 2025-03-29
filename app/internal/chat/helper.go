@@ -29,6 +29,13 @@ func quickSort(arr []*Message, low, high int) []*Message {
 	return arr
 }
 
-func QuickSortStart(arr []*Message) []*Message {
-	return quickSort(arr, 0, len(arr)-1)
+func QuickSortStart(msgs []*Message) []*Message {
+	return quickSort(msgs, 0, len(msgs)-1)
+}
+
+func ReverseOrder(msgs []*Message) []*Message {
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs
 }

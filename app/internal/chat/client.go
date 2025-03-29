@@ -35,6 +35,8 @@ func (client *Client) Send(msgJson []byte) {
 
 // Read from client
 func (client *Client) Read(room *Room) {
+	roomID := string(room.id)
+
 	for {
 		_, msg, err := client.wsConn.ReadMessage()
 		if err != nil {
@@ -43,12 +45,20 @@ func (client *Client) Read(room *Room) {
 			return
 		}
 
-		room.cache.PublishMessage(string(room.id), msg)
+		err = room.cache.PublishMessage(roomID, msg)
+		if err != nil {
+			continue
+		}
+
+		if room.cache.CacheFull(roomID) {
+			room.db.AddMessages()
+		}
+
 	}
 }
 
 func (client *Client) RestoreMessages(room *Room) {
-	msgs := room.cache.CachedMessages(string(room.id), FETCH_LIMIT)
+	msgs := room.cache.RestoreMessages(string(room.id), FETCH_LIMIT)
 	if len(msgs) == 0 {
 		return
 	}
