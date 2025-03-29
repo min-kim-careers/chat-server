@@ -14,15 +14,17 @@ type Room struct {
 	register   chan *Client
 	unregister chan *Client
 	cache      *Cache
+	db         *DB
 }
 
-func NewRoom(id RoomID, cache *Cache) *Room {
+func NewRoom(id RoomID, cache *Cache, db *DB) *Room {
 	return &Room{
 		id:         id,
 		clients:    make(map[ClientID]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		cache:      cache,
+		db:         db,
 	}
 }
 
@@ -55,7 +57,7 @@ func (room *Room) HandleRegistrations(hub *Hub) {
 }
 
 func (room *Room) HandleClients(hub *Hub) {
-	pubsub := hub.cache.GetPubSub(string(room.id))
+	pubsub := hub.cache.PubSub(string(room.id))
 	if pubsub == nil {
 		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", room.id)
 		hub.unregister <- room

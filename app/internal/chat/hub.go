@@ -27,7 +27,7 @@ func NewHub(db *DB, cache *Cache) *Hub {
 func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *Message) {
 	room, roomExists := hub.rooms[RoomID(connMsg.RoomID)]
 	if !roomExists {
-		newRoom := NewRoom(connMsg.RoomID, hub.cache)
+		newRoom := NewRoom(connMsg.RoomID, hub.cache, hub.db)
 		log.Printf("Room <%s> created.", connMsg.RoomID)
 		hub.register <- newRoom
 		room = newRoom
