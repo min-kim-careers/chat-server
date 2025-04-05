@@ -8,8 +8,8 @@ func partition(arr []*Message, low, high int) ([]*Message, int) {
 	pivot := arr[high]
 	i := low
 	for j := low; j < high; j++ {
-		t1, _ := time.Parse(ISOTimestampLayout, string(arr[j].Timestamp))
-		t2, _ := time.Parse(ISOTimestampLayout, string(pivot.Timestamp))
+		t1, _ := time.Parse(ISOTimestampLayout, arr[j].Timestamp)
+		t2, _ := time.Parse(ISOTimestampLayout, pivot.Timestamp)
 		if t1.Before(t2) {
 			arr[i], arr[j] = arr[j], arr[i]
 			i++

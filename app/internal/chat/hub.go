@@ -9,7 +9,7 @@ import (
 type Hub struct {
 	db         *DB
 	cache      *Cache
-	rooms      map[RoomID]*Room
+	rooms      map[string]*Room
 	register   chan *Room
 	unregister chan *Room
 }
@@ -18,14 +18,14 @@ func NewHub(db *DB, cache *Cache) *Hub {
 	return &Hub{
 		db:         db,
 		cache:      cache,
-		rooms:      make(map[RoomID]*Room),
+		rooms:      make(map[string]*Room),
 		register:   make(chan *Room),
 		unregister: make(chan *Room),
 	}
 }
 
 func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *Message) {
-	room, roomExists := hub.rooms[RoomID(connMsg.RoomID)]
+	room, roomExists := hub.rooms[connMsg.RoomID]
 	if !roomExists {
 		newRoom := NewRoom(connMsg.RoomID, hub.cache, hub.db)
 		log.Printf("Room <%s> created.", connMsg.RoomID)

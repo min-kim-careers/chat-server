@@ -6,21 +6,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type RoomID string
-
 type Room struct {
-	id         RoomID
-	clients    map[ClientID]*Client
+	id         string
+	clients    map[string]*Client
 	register   chan *Client
 	unregister chan *Client
 	cache      *Cache
 	db         *DB
 }
 
-func NewRoom(id RoomID, cache *Cache, db *DB) *Room {
+func NewRoom(id string, cache *Cache, db *DB) *Room {
 	return &Room{
 		id:         id,
-		clients:    make(map[ClientID]*Client),
+		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		cache:      cache,
@@ -28,7 +26,7 @@ func NewRoom(id RoomID, cache *Cache, db *DB) *Room {
 	}
 }
 
-func (room *Room) AddClient(wsConn *websocket.Conn, clientID ClientID) {
+func (room *Room) AddClient(wsConn *websocket.Conn, clientID string) {
 	newClient := NewClient(clientID, wsConn)
 	room.register <- newClient
 	newClient.Run(room)
@@ -57,7 +55,7 @@ func (room *Room) HandleRegistrations(hub *Hub) {
 }
 
 func (room *Room) HandleClients(hub *Hub) {
-	pubsub := hub.cache.PubSub(string(room.id))
+	pubsub := hub.cache.PubSub(room.id)
 	if pubsub == nil {
 		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", room.id)
 		hub.unregister <- room

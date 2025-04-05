@@ -85,7 +85,7 @@ func (db *DB) AcquireConn() (*pgxpool.Conn, error) {
 	return dbConn, err
 }
 
-func (db *DB) CreateMessageTable() {
+func (db *DB) CreateMessageTable() error {
 	dbConn, _ := db.AcquireConn()
 	defer dbConn.Release()
 
@@ -104,10 +104,12 @@ func (db *DB) CreateMessageTable() {
 	if err != nil {
 		log.Fatal("Error creating table:", err)
 	}
+
 	log.Println("Message table found.")
+	return nil
 }
 
-func (db *DB) AddMessage(msg *Message) error {
+func (db *DB) Add(msg *Message) error {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
@@ -122,30 +124,98 @@ func (db *DB) AddMessage(msg *Message) error {
 	_, err = dbConn.Exec(dbCtx, q, msg.Type, msg.RoomID, msg.ClientID, msg.Timestamp, msg.Content)
 	if err != nil {
 		log.Println("Error adding message:", err)
-	} else {
-		log.Println("Message added to DB.")
+		return err
 	}
-	return err
 
+	log.Println("Message added to DB.")
+	return nil
 }
 
-func (db *DB) AddMessages(msgs []*Message) {
+func (db *DB) AddBulk(msgs []*Message) error {
+	if len(msgs) == 0 {
+		log.Println("No messages to persist")
+		return nil
+	}
 
-}
-
-func (db *DB) GetMessageHistory(roomID RoomID) {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
-		return
+		return err
 	}
 
-	// q := `SELECT * FROM messages WHERE room_id = $1`
+	rows := make([][]any, len(msgs))
+	for i, msg := range msgs {
+		parsedTime, err := time.Parse(TIMESTAMP_FORMAT, msg.Timestamp)
+		if err != nil {
+			log.Println("Error parsing timestamp:", err)
+			return err
+		}
 
-	// rows, err := dbConn.Query(dbCtx, q, roomID)
-	// if err != nil {
-	// 	log.Printf("Error fetching message history for room <%s>.", roomID)
-	// } else {
-	// 	log.Printf("Fetched message history for room <%s>.", roomID)
-	// }
+		rows[i] = []any{msg.Type, msg.RoomID, msg.ClientID, parsedTime, msg.Content}
+	}
+
+	_, err = dbConn.CopyFrom(
+		dbCtx,
+		pgx.Identifier{"messages"},
+		[]string{"message_type", "room_id", "client_id", "timestamp", "message_content"},
+		pgx.CopyFromRows(rows),
+	)
+	if err != nil {
+		log.Printf("Error persisting bulk message: %v", err)
+		return err
+	}
+
+	log.Println("Successfully persisted cached messages")
+	return nil
+}
+
+func (db *DB) Restore(roomID string, after string, limit int) []*Message {
+	ts, err := time.Parse(TIMESTAMP_FORMAT, after)
+	if err != nil {
+		log.Printf("Error parsing time while restoring DB messages for room <%s>: %v", roomID, err)
+		return nil
+	}
+
+	dbConn, err := db.AcquireConn()
+	defer dbConn.Release()
+	if err != nil {
+		log.Printf("Error restoring DB messages for room <%s>.", roomID)
+		return nil
+	}
+
+	q := `
+	SELECT message_type, room_id, client_id, timestamp, message_content FROM messages 
+	WHERE room_id = $1 AND timestamp < $2
+	ORDER BY timestamp DESC
+	LIMIT $3
+	`
+
+	rows, err := dbConn.Query(dbCtx, q, roomID, ts, limit)
+	if err != nil {
+		log.Printf("Error querying messages from DB for room <%s>: %v", roomID, err)
+		return nil
+	}
+	defer rows.Close()
+
+	var msgs []*Message
+
+	for rows.Next() {
+		var ts time.Time
+		var msg Message
+		err := rows.Scan(&msg.Type, &msg.RoomID, &msg.ClientID, &ts, &msg.Content)
+		if err != nil {
+			log.Printf("Error scanning queried rows from DB for room <%s>: %v", roomID, err)
+			return nil
+		}
+		msg.Timestamp = ts.Format(TIMESTAMP_FORMAT)
+		msgs = append(msgs, &msg)
+	}
+
+	if rows.Err() != nil {
+		log.Printf("Error iterating queried rows from DB for room <%s>: %v", roomID, err)
+		return nil
+	}
+
+	log.Printf("Fetched %d messages from DB for room <%s>.", len(msgs), roomID)
+	return msgs
 }
