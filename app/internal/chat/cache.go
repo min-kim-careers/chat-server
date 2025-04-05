@@ -13,8 +13,6 @@ import (
 
 var cacheCtx = context.Background()
 
-const CACHE_LIMIT = 100
-
 type Cache struct {
 	client *redis.Client
 }
@@ -69,7 +67,7 @@ func (cache *Cache) PubSub(roomID string) *redis.PubSub {
 	return pubsub
 }
 
-func (cache *Cache) PublishMessage(roomID string, msgJson []byte) error {
+func (cache *Cache) Publish(roomID string, msgJson []byte) error {
 	key := generateKey(roomID)
 
 	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
@@ -80,7 +78,7 @@ func (cache *Cache) PublishMessage(roomID string, msgJson []byte) error {
 	return nil
 }
 
-func (cache *Cache) CacheFull(roomID string) bool {
+func (cache *Cache) IsFull(roomID string) bool {
 	key := generateKey(roomID)
 
 	res, err := cache.client.LLen(cacheCtx, key).Result()
@@ -92,7 +90,7 @@ func (cache *Cache) CacheFull(roomID string) bool {
 	return res > CACHE_LIMIT
 }
 
-func (cache *Cache) CacheMessage(roomID string, msgJson []byte) error {
+func (cache *Cache) Add(roomID string, msgJson []byte) error {
 	key := generateKey(roomID)
 
 	_, err := cache.client.RPush(cacheCtx, key, msgJson).Result()
@@ -103,12 +101,12 @@ func (cache *Cache) CacheMessage(roomID string, msgJson []byte) error {
 	return nil
 }
 
-func (cache *Cache) RestoreMessages(roomID string, limit int64) []*Message {
+func (cache *Cache) Restore(roomID string, limit int64) []*Message {
 	key := generateKey(roomID)
 
 	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
 	if err != nil {
-		log.Printf("Error getting cached messages for room <%s>: %v", roomID, err)
+		log.Printf("Error restoring cached messages for room <%s>: %v", roomID, err)
 		return nil
 	}
 
@@ -124,5 +122,18 @@ func (cache *Cache) RestoreMessages(roomID string, limit int64) []*Message {
 		msgs = append(msgs, &msg)
 	}
 
+	log.Printf("Fetched %d messages from cache for room <%s>.", len(msgs), roomID)
 	return ReverseOrder(msgs)
+}
+
+func (cache *Cache) Clear(roomID string) error {
+	key := generateKey(roomID)
+
+	err := cache.client.Del(cacheCtx, key).Err()
+	if err != nil {
+		log.Printf("Error clearing messages for room <%s>: %v", roomID, err)
+		return err
+	}
+
+	return nil
 }

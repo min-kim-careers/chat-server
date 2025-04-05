@@ -8,32 +8,24 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type (
-	MessageType    string
-	ItemID         string
-	TargetID       string
-	Timestamp      string
-	MessageContent any
-)
-
-var validMessageTypes = map[MessageType]bool{
+var validMessageTypes = map[string]bool{
 	"connect":    true,
 	"disconnect": true,
-	"enter":      true,
-	"leave":      true,
-	"chat":       true,
-	"typing":     true,
-	"edit":       true,
-	"delete":     true,
-	"restore":    true,
+	// "enter":      true,
+	// "leave":      true,
+	"chat": true,
+	// "typing":     true,
+	// "edit":       true,
+	// "delete":     true,
+	"restore": true,
 }
 
 type Message struct {
-	Type      MessageType    `json:"message_type" validate:"required"`
-	RoomID    RoomID         `json:"room_id" validate:"required"`
-	ClientID  ClientID       `json:"client_id" validate:"required"`
-	Timestamp Timestamp      `json:"timestamp"`
-	Content   MessageContent `json:"message_content"`
+	Type      string `json:"message_type" validate:"required"`
+	RoomID    string `json:"room_id" validate:"required"`
+	ClientID  string `json:"client_id" validate:"required"`
+	Timestamp string `json:"timestamp"`
+	Content   any    `json:"message_content"`
 }
 
 func validateMessage(msg *Message) bool {

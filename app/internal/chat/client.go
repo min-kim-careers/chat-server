@@ -7,16 +7,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const FETCH_LIMIT = 100
-
-type ClientID string
-
 type Client struct {
-	id     ClientID
+	id     string
 	wsConn *websocket.Conn
 }
 
-func NewClient(id ClientID, wsConn *websocket.Conn) *Client {
+func NewClient(id string, wsConn *websocket.Conn) *Client {
 	return &Client{
 		id:     id,
 		wsConn: wsConn,
@@ -35,7 +31,9 @@ func (client *Client) Send(msgJson []byte) {
 
 // Read from client
 func (client *Client) Read(room *Room) {
-	roomID := string(room.id)
+	roomID := room.id
+	db := room.db
+	cache := room.cache
 
 	for {
 		_, msg, err := client.wsConn.ReadMessage()
@@ -45,20 +43,46 @@ func (client *Client) Read(room *Room) {
 			return
 		}
 
-		err = room.cache.PublishMessage(roomID, msg)
+		err = cache.Publish(roomID, msg)
 		if err != nil {
 			continue
 		}
 
-		if room.cache.CacheFull(roomID) {
-			room.db.AddMessages()
+		err = cache.Add(roomID, msg)
+		if err != nil {
+			continue
+		}
+
+		if !cache.IsFull(roomID) {
+			continue
+		}
+
+		cachedMsgs := cache.Restore(roomID, RESTORE_LIMIT)
+		if len(cachedMsgs) == 0 {
+			continue
+		}
+
+		err = db.AddBulk(cachedMsgs)
+		if err != nil {
+			log.Printf("Error persisting messages for room <%s>: %v", roomID, err)
+		} else {
+			cache.Clear(roomID)
 		}
 
 	}
 }
 
 func (client *Client) RestoreMessages(room *Room) {
-	msgs := room.cache.RestoreMessages(string(room.id), FETCH_LIMIT)
+	msgs := room.cache.Restore(room.id, RESTORE_LIMIT)
+
+	if len(msgs) < RESTORE_LIMIT {
+		delta := RESTORE_LIMIT - len(msgs)
+		dbMsgs := room.db.Restore(room.id, msgs[len(msgs)-1].Timestamp, delta)
+		if dbMsgs != nil {
+			msgs = append(msgs, dbMsgs...)
+		}
+	}
+
 	if len(msgs) == 0 {
 		return
 	}
@@ -68,7 +92,7 @@ func (client *Client) RestoreMessages(room *Room) {
 		RoomID:    room.id,
 		ClientID:  client.id,
 		Content:   msgs,
-		Timestamp: Timestamp(time.Now().Format(time.RFC3339)),
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
 	msgJson := SerializeMessage(&msg)
