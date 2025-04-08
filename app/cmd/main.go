@@ -1,8 +1,8 @@
 package main
 
 import (
-	"chat-go/internal/chat"
-	"chat-go/internal/server"
+	"chat-ws/internal/chat"
+	"chat-ws/internal/server"
 	"flag"
 	"log"
 	"net/http"

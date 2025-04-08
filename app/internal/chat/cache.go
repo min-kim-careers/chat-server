@@ -53,12 +53,12 @@ func initCacheClient() *redis.Client {
 	return client
 }
 
-func generateKey(roomID string) string {
+func generateCacheKey(roomID string) string {
 	return "chat:room:" + roomID
 }
 
 func (cache *Cache) PubSub(roomID string) *redis.PubSub {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	pubsub := cache.client.Subscribe(cacheCtx, key)
 	if pubsub == nil {
@@ -68,7 +68,7 @@ func (cache *Cache) PubSub(roomID string) *redis.PubSub {
 }
 
 func (cache *Cache) Publish(roomID string, msgJson []byte) error {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
 	if err != nil {
@@ -79,7 +79,7 @@ func (cache *Cache) Publish(roomID string, msgJson []byte) error {
 }
 
 func (cache *Cache) IsFull(roomID string) bool {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	res, err := cache.client.LLen(cacheCtx, key).Result()
 	if err != nil {
@@ -91,7 +91,7 @@ func (cache *Cache) IsFull(roomID string) bool {
 }
 
 func (cache *Cache) Add(roomID string, msgJson []byte) error {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	_, err := cache.client.RPush(cacheCtx, key, msgJson).Result()
 	if err != nil {
@@ -102,7 +102,7 @@ func (cache *Cache) Add(roomID string, msgJson []byte) error {
 }
 
 func (cache *Cache) Restore(roomID string, limit int64) []*Message {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
 	if err != nil {
@@ -127,7 +127,7 @@ func (cache *Cache) Restore(roomID string, limit int64) []*Message {
 }
 
 func (cache *Cache) Clear(roomID string) error {
-	key := generateKey(roomID)
+	key := generateCacheKey(roomID)
 
 	err := cache.client.Del(cacheCtx, key).Err()
 	if err != nil {

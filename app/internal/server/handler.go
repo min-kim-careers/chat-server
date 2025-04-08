@@ -1,7 +1,7 @@
 package server
 
 import (
-	"chat-go/internal/chat"
+	"chat-ws/internal/chat"
 	"log"
 	"net/http"
 

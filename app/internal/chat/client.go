@@ -77,7 +77,7 @@ func (client *Client) RestoreMessages(room *Room) {
 
 	if len(msgs) < RESTORE_LIMIT {
 		delta := RESTORE_LIMIT - len(msgs)
-		dbMsgs := room.db.Restore(room.id, msgs[len(msgs)-1].Timestamp, delta)
+		dbMsgs := room.db.Restore(room.id, delta)
 		if dbMsgs != nil {
 			msgs = append(msgs, dbMsgs...)
 		}
