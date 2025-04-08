@@ -5,12 +5,6 @@ go 1.23.6
 require github.com/gorilla/websocket v1.5.3
 
 require (
-	github.com/klauspost/compress v1.15.9 // indirect
-	github.com/pierrec/lz4/v4 v4.1.15 // indirect
-	github.com/segmentio/kafka-go v0.4.47
-)
-
-require (
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
@@ -28,10 +22,7 @@ require (
 	golang.org/x/sync v0.11.0 // indirect
 )
 
-require (
-	github.com/gorilla/schema v1.4.1
-	github.com/stretchr/testify v1.10.0 // indirect
-)
+require github.com/stretchr/testify v1.10.0 // indirect
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
