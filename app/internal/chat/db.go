@@ -169,13 +169,7 @@ func (db *DB) AddBulk(msgs []*Message) error {
 	return nil
 }
 
-func (db *DB) Restore(roomID string, after string, limit int) []*Message {
-	ts, err := time.Parse(TIMESTAMP_FORMAT, after)
-	if err != nil {
-		log.Printf("Error parsing time while restoring DB messages for room <%s>: %v", roomID, err)
-		return nil
-	}
-
+func (db *DB) Restore(roomID string, limit int) []*Message {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
@@ -185,12 +179,12 @@ func (db *DB) Restore(roomID string, after string, limit int) []*Message {
 
 	q := `
 	SELECT message_type, room_id, client_id, timestamp, message_content FROM messages 
-	WHERE room_id = $1 AND timestamp < $2
+	WHERE room_id = $1
 	ORDER BY timestamp DESC
-	LIMIT $3
+	LIMIT $2
 	`
 
-	rows, err := dbConn.Query(dbCtx, q, roomID, ts, limit)
+	rows, err := dbConn.Query(dbCtx, q, roomID, limit)
 	if err != nil {
 		log.Printf("Error querying messages from DB for room <%s>: %v", roomID, err)
 		return nil
