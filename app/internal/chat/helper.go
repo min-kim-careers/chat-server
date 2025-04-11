@@ -39,3 +39,12 @@ func ReverseOrder(msgs []*Message) []*Message {
 	}
 	return msgs
 }
+
+func ConvertTimestamp(timestamp string) float64 {
+	t, err := time.Parse(TIMESTAMP_FORMAT, timestamp)
+	if err != nil {
+		return 0
+	}
+
+	return float64(t.Unix())
+}

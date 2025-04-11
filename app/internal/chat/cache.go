@@ -67,38 +67,42 @@ func (cache *Cache) PubSub(roomID string) *redis.PubSub {
 	return pubsub
 }
 
-func (cache *Cache) Publish(roomID string, msgJson []byte) error {
+func (cache *Cache) Publish(roomID string, msgJson []byte) bool {
 	key := generateCacheKey(roomID)
 
 	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
 	if err != nil {
 		log.Printf("Error publishing following message to room <%s>: %v", key, err)
-		return err
-	}
-	return nil
-}
-
-func (cache *Cache) IsFull(roomID string) bool {
-	key := generateCacheKey(roomID)
-
-	res, err := cache.client.LLen(cacheCtx, key).Result()
-	if err != nil {
-		log.Printf("Error retrieving cache length for room <%s>: %v", roomID, err)
 		return false
 	}
 
-	return res > CACHE_LIMIT
+	log.Printf("Published following message to room <%s>: %v", key, err)
+	return true
 }
 
-func (cache *Cache) Add(roomID string, msgJson []byte) error {
+func (cache *Cache) IsFull(roomID string, cacheLimit int64) bool {
+	key := generateCacheKey(roomID)
+
+	count, err := cache.client.LLen(cacheCtx, key).Result()
+	if err != nil {
+		log.Printf("Error checking if cache is full <%s>: %v", roomID, err)
+		return false
+	}
+
+	return count >= cacheLimit
+}
+
+func (cache *Cache) Add(roomID string, msgJson []byte) bool {
 	key := generateCacheKey(roomID)
 
 	_, err := cache.client.RPush(cacheCtx, key, msgJson).Result()
 	if err != nil {
 		log.Printf("Error caching message in room <%s>: %s", roomID, err)
-		return err
+		return false
 	}
-	return nil
+
+	log.Printf("Cached message in room <%s>.", roomID)
+	return true
 }
 
 func (cache *Cache) Restore(roomID string, limit int64) []*Message {
@@ -110,7 +114,7 @@ func (cache *Cache) Restore(roomID string, limit int64) []*Message {
 		return nil
 	}
 
-	var msgs []*Message
+	msgs := []*Message{}
 
 	for _, cachedMsg := range cachedMsgs {
 		var msg Message
@@ -123,17 +127,16 @@ func (cache *Cache) Restore(roomID string, limit int64) []*Message {
 	}
 
 	log.Printf("Fetched %d messages from cache for room <%s>.", len(msgs), roomID)
-	return ReverseOrder(msgs)
+	return msgs
 }
 
-func (cache *Cache) Clear(roomID string) error {
+func (cache *Cache) Clear(roomID string) {
 	key := generateCacheKey(roomID)
 
 	err := cache.client.Del(cacheCtx, key).Err()
 	if err != nil {
 		log.Printf("Error clearing messages for room <%s>: %v", roomID, err)
-		return err
 	}
 
-	return nil
+	log.Printf("Cleared messages for room <%s>: %v", roomID, err)
 }
