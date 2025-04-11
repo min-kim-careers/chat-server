@@ -11,13 +11,16 @@ import (
 var validMessageTypes = map[string]bool{
 	"connect":    true,
 	"disconnect": true,
+	"chat":       true,
+	"restore":    true,
+	"empty":      true,
+
 	// "enter":      true,
 	// "leave":      true,
-	"chat": true,
 	// "typing":     true,
 	// "edit":       true,
 	// "delete":     true,
-	"restore": true,
+
 }
 
 type Message struct {

@@ -109,11 +109,11 @@ func (db *DB) CreateMessageTable() error {
 	return nil
 }
 
-func (db *DB) Add(msg *Message) error {
+func (db *DB) Insert(msg *Message) bool {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
-		return err
+		return false
 	}
 
 	q := `
@@ -124,23 +124,23 @@ func (db *DB) Add(msg *Message) error {
 	_, err = dbConn.Exec(dbCtx, q, msg.Type, msg.RoomID, msg.ClientID, msg.Timestamp, msg.Content)
 	if err != nil {
 		log.Println("Error adding message:", err)
-		return err
+		return false
 	}
 
 	log.Println("Message added to DB.")
-	return nil
+	return true
 }
 
-func (db *DB) AddBulk(msgs []*Message) error {
+func (db *DB) BulkInsert(msgs []*Message) bool {
 	if len(msgs) == 0 {
 		log.Println("No messages to persist")
-		return nil
+		return false
 	}
 
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
-		return err
+		return false
 	}
 
 	rows := make([][]any, len(msgs))
@@ -148,7 +148,7 @@ func (db *DB) AddBulk(msgs []*Message) error {
 		parsedTime, err := time.Parse(TIMESTAMP_FORMAT, msg.Timestamp)
 		if err != nil {
 			log.Println("Error parsing timestamp:", err)
-			return err
+			return false
 		}
 
 		rows[i] = []any{msg.Type, msg.RoomID, msg.ClientID, parsedTime, msg.Content}
@@ -161,15 +161,20 @@ func (db *DB) AddBulk(msgs []*Message) error {
 		pgx.CopyFromRows(rows),
 	)
 	if err != nil {
-		log.Printf("Error persisting bulk message: %v", err)
-		return err
+		log.Printf("Error bulk inserting messages: %v", err)
+		return false
 	}
 
-	log.Println("Successfully persisted cached messages")
-	return nil
+	log.Println("Successfully bulk inserted messages")
+	return true
 }
 
-func (db *DB) Restore(roomID string, limit int) []*Message {
+func (db *DB) Restore(roomID, timestamp string, limit int) []*Message {
+	if roomID == "" || timestamp == "" || limit <= 0 {
+		log.Println("Invalid parameters passed to Restore")
+		return nil
+	}
+
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
@@ -179,19 +184,19 @@ func (db *DB) Restore(roomID string, limit int) []*Message {
 
 	q := `
 	SELECT message_type, room_id, client_id, timestamp, message_content FROM messages 
-	WHERE room_id = $1
+	WHERE room_id = $1 AND timestamp < $2
 	ORDER BY timestamp DESC
-	LIMIT $2
+	LIMIT $3
 	`
 
-	rows, err := dbConn.Query(dbCtx, q, roomID, limit)
+	rows, err := dbConn.Query(dbCtx, q, roomID, timestamp, limit)
 	if err != nil {
 		log.Printf("Error querying messages from DB for room <%s>: %v", roomID, err)
 		return nil
 	}
 	defer rows.Close()
 
-	var msgs []*Message
+	msgs := []*Message{}
 
 	for rows.Next() {
 		var ts time.Time
