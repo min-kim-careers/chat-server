@@ -1,4 +1,4 @@
-module chat-ws
+module chat-server
 
 go 1.23.6
 
