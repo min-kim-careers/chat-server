@@ -25,10 +25,7 @@ func (client *Client) initializeMessages(room *Room) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
-	msgs := room.cache.Restore(room.id, RESTORE_LIMIT)
-	if len(msgs) > 2 {
-		msgs = ReverseOrder(msgs)
-	}
+	msgs := ReverseOrder(room.cache.Restore(room.id, RESTORE_LIMIT))
 
 	if len(msgs) < RESTORE_LIMIT {
 		var lastTimestamp string
