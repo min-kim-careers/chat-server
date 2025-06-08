@@ -1,10 +1,14 @@
-package chat
+package utils
 
-import "time"
+import (
+	"time"
+
+	"chat-server/internal/models"
+)
 
 var ISOTimestampLayout = "2006-01-02T15:04:05.999Z"
 
-func partition(arr []*Message, low, high int) ([]*Message, int) {
+func partition(arr []*models.Message, low, high int) ([]*models.Message, int) {
 	pivot := arr[high]
 	i := low
 	for j := low; j < high; j++ {
@@ -19,7 +23,7 @@ func partition(arr []*Message, low, high int) ([]*Message, int) {
 	return arr, i
 }
 
-func quickSort(arr []*Message, low, high int) []*Message {
+func quickSort(arr []*models.Message, low, high int) []*models.Message {
 	if low < high {
 		var p int
 		arr, p = partition(arr, low, high)
@@ -29,11 +33,11 @@ func quickSort(arr []*Message, low, high int) []*Message {
 	return arr
 }
 
-func QuickSortStart(msgs []*Message) []*Message {
+func QuickSortStart(msgs []*models.Message) []*models.Message {
 	return quickSort(msgs, 0, len(msgs)-1)
 }
 
-func ReverseOrder(msgs []*Message) []*Message {
+func ReverseOrder(msgs []*models.Message) []*models.Message {
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}

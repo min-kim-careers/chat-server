@@ -3,18 +3,22 @@ package chat
 import (
 	"log"
 
+	"chat-server/internal/cache"
+	"chat-server/internal/db"
+	"chat-server/internal/models"
+
 	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
-	db         *DB
-	cache      *Cache
+	db         *db.DB
+	cache      *cache.Cache
 	rooms      map[string]*Room
 	register   chan *Room
 	unregister chan *Room
 }
 
-func NewHub(db *DB, cache *Cache) *Hub {
+func NewHub(db *db.DB, cache *cache.Cache) *Hub {
 	return &Hub{
 		db:         db,
 		cache:      cache,
@@ -24,7 +28,7 @@ func NewHub(db *DB, cache *Cache) *Hub {
 	}
 }
 
-func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *Message) {
+func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *models.Message) {
 	room, roomExists := hub.rooms[connMsg.RoomID]
 	if !roomExists {
 		newRoom := NewRoom(connMsg.RoomID, hub.cache, hub.db)

@@ -1,0 +1,52 @@
+services:
+  chat-db-service:
+    container_name: chat-db-container
+    restart: always
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=chatdbuser
+      - POSTGRES_PASSWORD=REDACTED
+      - POSTGRES_DB=chatdb
+    volumes:
+      - chat-db-data:/var/lib/postgresql/data
+
+  chat-cache-service:
+    container_name: chat-cache-container
+    restart: always
+    image: redis:latest
+    environment:
+      - REDIS_HOST=chat-cache-service
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=REDACTED
+    command: [ '/bin/sh', '-c', 'redis-server --save 20 1 --loglevel warning --requirepass $$REDIS_PASSWORD' ]
+    volumes:
+      - chat-cache-data:/data
+
+  chat-server-service:
+    depends_on:
+      - chat-db-service
+      - chat-cache-service
+    container_name: chat-server-container
+    restart: always
+    build: .
+    environment:
+      # Postgres
+      - DB_HOST=chat-db-service
+      - DB_PORT=5432
+      - DB_USER=chatuser
+      - DB_PASSWORD=REDACTED
+      - DB_NAME=chatdb
+
+      # Redis
+      - CACHE_HOST=chat-cache-service
+      - CACHE_PORT=6379
+      - CACHE_PASSWORD=REDACTED
+      - CACHE_DB=0
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app
+
+volumes:
+  chat-db-data:
+  chat-cache-data:

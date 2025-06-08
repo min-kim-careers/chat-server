@@ -1,6 +1,9 @@
 package chat
 
 import (
+	"chat-server/internal/cache"
+	"chat-server/internal/db"
+	"chat-server/internal/models"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -11,11 +14,11 @@ type Room struct {
 	clients    map[string]*Client
 	register   chan *Client
 	unregister chan *Client
-	cache      *Cache
-	db         *DB
+	cache      *cache.Cache
+	db         *db.DB
 }
 
-func NewRoom(id string, cache *Cache, db *DB) *Room {
+func NewRoom(id string, cache *cache.Cache, db *db.DB) *Room {
 	return &Room{
 		id:         id,
 		clients:    make(map[string]*Client),
@@ -68,7 +71,7 @@ func (room *Room) HandleClients(hub *Hub) {
 	for data := range channel {
 		msgJson := []byte(data.Payload)
 
-		msg := DeserializeMessage(msgJson)
+		msg := models.DeserializeMessage(msgJson)
 		if msg == nil {
 			log.Printf("Error deserializing message in room <%s>. Message: %s", room.id, msgJson)
 			continue
