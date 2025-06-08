@@ -1,4 +1,4 @@
-package chat
+package cache
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"strconv"
+
+	"chat-server/internal/models"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -105,7 +107,7 @@ func (cache *Cache) Add(roomID string, msgJson []byte) bool {
 	return true
 }
 
-func (cache *Cache) Restore(roomID string, limit int64) []*Message {
+func (cache *Cache) Restore(roomID string, limit int64) []*models.Message {
 	key := generateCacheKey(roomID)
 
 	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
@@ -114,10 +116,10 @@ func (cache *Cache) Restore(roomID string, limit int64) []*Message {
 		return nil
 	}
 
-	msgs := []*Message{}
+	msgs := []*models.Message{}
 
 	for _, cachedMsg := range cachedMsgs {
-		var msg Message
+		var msg models.Message
 		err = json.Unmarshal([]byte(cachedMsg), &msg)
 		if err != nil {
 			log.Println("Error unmarshalling cached messages:", err)

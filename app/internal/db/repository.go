@@ -1,89 +1,14 @@
-package chat
+package db
 
 import (
+	"chat-server/internal/models"
+	"chat-server/internal/utils"
 	"context"
-	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var dbCtx = context.Background()
-
-type DB struct {
-	pool *pgxpool.Pool
-}
-
-func NewDB() *DB {
-	return &DB{
-		pool: initDBPool(),
-	}
-}
-
-func initDBPool() *pgxpool.Pool {
-	const defaultMaxConns = int32(4)
-	const defaultMinConns = int32(0)
-	const defaultMaxConnLifetime = time.Hour
-	const defaultMaxConnIdleTime = time.Minute * 30
-	const defaultHealthCheckPeriod = time.Minute
-	const defaultConnectTimeout = time.Second * 5
-
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbName := os.Getenv("DB_NAME")
-
-	if dbUser == "" || dbPassword == "" || dbHost == "" || dbPort == "" || dbName == "" {
-		log.Fatal("Missing required database environment variables")
-	}
-
-	dbConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPassword, dbHost, dbPort, dbName)
-
-	dbConfig, err := pgxpool.ParseConfig(dbConnStr)
-	if err != nil {
-		log.Fatal("Failed to create a config:", err)
-	}
-
-	dbConfig.MaxConns = defaultMaxConns
-	dbConfig.MinConns = defaultMinConns
-	dbConfig.MaxConnLifetime = defaultMaxConnLifetime
-	dbConfig.MaxConnIdleTime = defaultMaxConnIdleTime
-	dbConfig.HealthCheckPeriod = defaultHealthCheckPeriod
-	dbConfig.ConnConfig.ConnectTimeout = defaultConnectTimeout
-
-	dbConfig.BeforeAcquire = func(ctx context.Context, c *pgx.Conn) bool {
-		log.Println("Acquiring a DB connection.")
-		return true
-	}
-
-	dbConfig.AfterRelease = func(c *pgx.Conn) bool {
-		log.Println("Releasing a DB connection.")
-		return true
-	}
-
-	dbConfig.BeforeClose = func(c *pgx.Conn) {
-		log.Println("Database closing.")
-	}
-
-	dbPool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
-	if err != nil {
-		log.Fatal("Error while creating a DB pool:", err)
-	}
-
-	return dbPool
-}
-
-func (db *DB) AcquireConn() (*pgxpool.Conn, error) {
-	dbConn, err := db.pool.Acquire(context.Background())
-	if err != nil {
-		log.Println("Error acquiring DB connection:", err)
-	}
-	return dbConn, err
-}
 
 func (db *DB) CreateMessageTable() error {
 	dbConn, _ := db.AcquireConn()
@@ -109,7 +34,7 @@ func (db *DB) CreateMessageTable() error {
 	return nil
 }
 
-func (db *DB) Insert(msg *Message) bool {
+func (db *DB) Insert(msg *models.Message) bool {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
@@ -131,7 +56,7 @@ func (db *DB) Insert(msg *Message) bool {
 	return true
 }
 
-func (db *DB) BulkInsert(msgs []*Message) bool {
+func (db *DB) BulkInsert(msgs []*models.Message) bool {
 	if len(msgs) == 0 {
 		log.Println("No messages to persist")
 		return false
@@ -145,7 +70,7 @@ func (db *DB) BulkInsert(msgs []*Message) bool {
 
 	rows := make([][]any, len(msgs))
 	for i, msg := range msgs {
-		parsedTime, err := time.Parse(TIMESTAMP_FORMAT, msg.Timestamp)
+		parsedTime, err := time.Parse(utils.TIMESTAMP_FORMAT, msg.Timestamp)
 		if err != nil {
 			log.Println("Error parsing timestamp:", err)
 			return false
@@ -169,7 +94,7 @@ func (db *DB) BulkInsert(msgs []*Message) bool {
 	return true
 }
 
-func (db *DB) Restore(roomID, timestamp string, limit int) []*Message {
+func (db *DB) Restore(roomID, timestamp string, limit int) []*models.Message {
 	if roomID == "" || timestamp == "" || limit <= 0 {
 		log.Println("Invalid parameters passed to Restore")
 		return nil
@@ -196,17 +121,17 @@ func (db *DB) Restore(roomID, timestamp string, limit int) []*Message {
 	}
 	defer rows.Close()
 
-	msgs := []*Message{}
+	msgs := []*models.Message{}
 
 	for rows.Next() {
 		var ts time.Time
-		var msg Message
+		var msg models.Message
 		err := rows.Scan(&msg.Type, &msg.RoomID, &msg.ClientID, &ts, &msg.Content)
 		if err != nil {
 			log.Printf("Error scanning queried rows from DB for room <%s>: %v", roomID, err)
 			return nil
 		}
-		msg.Timestamp = ts.Format(TIMESTAMP_FORMAT)
+		msg.Timestamp = ts.Format(utils.TIMESTAMP_FORMAT)
 		msgs = append(msgs, &msg)
 	}
 

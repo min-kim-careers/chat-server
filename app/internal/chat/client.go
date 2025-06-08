@@ -1,6 +1,10 @@
 package chat
 
 import (
+	"chat-server/internal/cache"
+	"chat-server/internal/db"
+	"chat-server/internal/models"
+	"chat-server/internal/utils"
 	"log"
 	"sync"
 	"time"
@@ -25,31 +29,31 @@ func (client *Client) initializeMessages(room *Room) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
-	msgs := ReverseOrder(room.cache.Restore(room.id, RESTORE_LIMIT))
+	msgs := utils.ReverseOrder(room.cache.Restore(room.id, utils.RESTORE_LIMIT))
 
-	if len(msgs) < RESTORE_LIMIT {
+	if len(msgs) < utils.RESTORE_LIMIT {
 		var lastTimestamp string
 		if len(msgs) == 0 {
-			lastTimestamp = time.Now().Format(TIMESTAMP_FORMAT)
+			lastTimestamp = time.Now().Format(utils.TIMESTAMP_FORMAT)
 		} else {
 			lastTimestamp = msgs[len(msgs)-1].Timestamp
 		}
 
-		delta := RESTORE_LIMIT - len(msgs)
+		delta := utils.RESTORE_LIMIT - len(msgs)
 		dbMsgs := room.db.Restore(room.id, lastTimestamp, delta)
 		if dbMsgs != nil {
 			msgs = append(msgs, dbMsgs...)
 		}
 	}
 
-	msg := &Message{
+	msg := &models.Message{
 		Type:     "restore",
 		RoomID:   room.id,
 		ClientID: client.id,
 		Content:  msgs,
 	}
 
-	msgJson := SerializeMessage(msg)
+	msgJson := models.SerializeMessage(msg)
 	if msgJson == nil {
 		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", client.id, room.id)
 		return
@@ -58,7 +62,7 @@ func (client *Client) initializeMessages(room *Room) {
 	client.Send(msgJson)
 }
 
-func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *Cache, db *DB) {
+func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *cache.Cache, db *db.DB) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
@@ -70,11 +74,11 @@ func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *Ca
 		return
 	}
 
-	if !cache.IsFull(roomID, CACHE_LIMIT) {
+	if !cache.IsFull(roomID, utils.CACHE_LIMIT) {
 		return
 	}
 
-	cachedMsgs := cache.Restore(roomID, RESTORE_LIMIT)
+	cachedMsgs := cache.Restore(roomID, utils.RESTORE_LIMIT)
 	if len(cachedMsgs) == 0 {
 		return
 	}
@@ -86,20 +90,20 @@ func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *Ca
 	cache.Clear(roomID)
 }
 
-func (client *Client) handleRestoreMessage(roomID, timestamp string, db *DB) {
+func (client *Client) handleRestoreMessage(roomID, timestamp string, db *db.DB) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
-	dbMsgs := db.Restore(roomID, timestamp, RESTORE_LIMIT)
+	dbMsgs := db.Restore(roomID, timestamp, utils.RESTORE_LIMIT)
 
-	newMsg := &Message{
+	newMsg := &models.Message{
 		Type:     "restore",
 		RoomID:   roomID,
 		ClientID: client.id,
 		Content:  dbMsgs,
 	}
 
-	msgJson := SerializeMessage(newMsg)
+	msgJson := models.SerializeMessage(newMsg)
 	if msgJson == nil {
 		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", client.id, roomID)
 		return
@@ -132,7 +136,7 @@ func (client *Client) Read(room *Room) {
 			return
 		}
 
-		msg := DeserializeMessage(msgJson)
+		msg := models.DeserializeMessage(msgJson)
 		if msg == nil {
 			continue
 		}

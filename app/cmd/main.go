@@ -1,8 +1,10 @@
 package main
 
 import (
+	"chat-server/internal/api"
+	"chat-server/internal/cache"
 	"chat-server/internal/chat"
-	"chat-server/internal/server"
+	"chat-server/internal/db"
 	"flag"
 	"log"
 	"net/http"
@@ -12,12 +14,12 @@ var addr = flag.String("addr", ":8080", "http service address")
 
 func main() {
 	// Database
-	newDB := chat.NewDB()
+	newDB := db.NewDB()
 	newDB.CreateMessageTable()
 	log.Println("DB init successful.")
 
 	// Cache
-	newCache := chat.NewCache()
+	newCache := cache.NewCache()
 	log.Println("Cache init successful.")
 
 	// Hub
@@ -31,7 +33,7 @@ func main() {
 	flag.Parse()
 
 	http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
-		server.HandleWebsocketConnection(w, r, newHub)
+		api.HandleWebsocketConnection(w, r, newHub)
 	})
 
 	log.Printf("Websocket server starting on %s.", *addr)

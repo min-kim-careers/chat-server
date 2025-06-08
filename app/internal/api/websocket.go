@@ -1,7 +1,8 @@
-package server
+package api
 
 import (
 	"chat-server/internal/chat"
+	"chat-server/internal/models"
 	"log"
 	"net/http"
 
@@ -28,7 +29,7 @@ func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat
 		return
 	}
 
-	connMsg := chat.DeserializeMessage(msgJson)
+	connMsg := models.DeserializeMessage(msgJson)
 	if connMsg == nil {
 		wsConn.Close()
 		return
