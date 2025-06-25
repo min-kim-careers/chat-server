@@ -33,7 +33,7 @@ services:
       # Postgres
       - DB_HOST=chat-db-service
       - DB_PORT=5432
-      - DB_USER=chatuser
+      - DB_USER=chatdbuser
       - DB_PASSWORD=REDACTED
       - DB_NAME=chatdb
 
