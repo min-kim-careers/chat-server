@@ -40,7 +40,7 @@ func (client *Client) initializeMessages(room *Room) {
 		}
 
 		delta := utils.RESTORE_LIMIT - len(msgs)
-		dbMsgs := room.db.Restore(room.id, lastTimestamp, delta)
+		dbMsgs := room.db.RestoreMessages(room.id, lastTimestamp, delta)
 		if dbMsgs != nil {
 			msgs = append(msgs, dbMsgs...)
 		}
@@ -83,7 +83,7 @@ func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *ca
 		return
 	}
 
-	if !db.BulkInsert(cachedMsgs) {
+	if !db.BulkInsertMessages(cachedMsgs) {
 		return
 	}
 
@@ -94,7 +94,7 @@ func (client *Client) handleRestoreMessage(roomID, timestamp string, db *db.DB) 
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
-	dbMsgs := db.Restore(roomID, timestamp, utils.RESTORE_LIMIT)
+	dbMsgs := db.RestoreMessages(roomID, timestamp, utils.RESTORE_LIMIT)
 
 	newMsg := &models.Message{
 		Type:     "restore",

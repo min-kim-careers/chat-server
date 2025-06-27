@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
 
 	"chat-server/internal/models"
@@ -51,4 +53,9 @@ func ConvertTimestamp(timestamp string) float64 {
 	}
 
 	return float64(t.Unix())
+}
+
+func HashString(s string) string {
+	hash := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(hash[:])
 }

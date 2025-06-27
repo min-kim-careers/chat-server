@@ -48,19 +48,19 @@ func initCacheClient() *redis.Client {
 
 	_, err = client.Ping(cacheCtx).Result()
 	if err != nil {
-		log.Fatal("Could not connect to Redis:", err)
+		log.Fatal("Could not connect to cache server:", err)
 	}
-	log.Println("Connected to Redis.")
+	log.Println("Connected to cache server.")
 
 	return client
 }
 
-func generateCacheKey(roomID string) string {
+func roomKey(roomID string) string {
 	return "chat:room:" + roomID
 }
 
 func (cache *Cache) PubSub(roomID string) *redis.PubSub {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	pubsub := cache.client.Subscribe(cacheCtx, key)
 	if pubsub == nil {
@@ -70,7 +70,7 @@ func (cache *Cache) PubSub(roomID string) *redis.PubSub {
 }
 
 func (cache *Cache) Publish(roomID string, msgJson []byte) bool {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
 	if err != nil {
@@ -83,7 +83,7 @@ func (cache *Cache) Publish(roomID string, msgJson []byte) bool {
 }
 
 func (cache *Cache) IsFull(roomID string, cacheLimit int64) bool {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	count, err := cache.client.LLen(cacheCtx, key).Result()
 	if err != nil {
@@ -95,7 +95,7 @@ func (cache *Cache) IsFull(roomID string, cacheLimit int64) bool {
 }
 
 func (cache *Cache) Add(roomID string, msgJson []byte) bool {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	_, err := cache.client.RPush(cacheCtx, key, msgJson).Result()
 	if err != nil {
@@ -108,7 +108,7 @@ func (cache *Cache) Add(roomID string, msgJson []byte) bool {
 }
 
 func (cache *Cache) Restore(roomID string, limit int64) []*models.Message {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
 	if err != nil {
@@ -133,7 +133,7 @@ func (cache *Cache) Restore(roomID string, limit int64) []*models.Message {
 }
 
 func (cache *Cache) Clear(roomID string) {
-	key := generateCacheKey(roomID)
+	key := roomKey(roomID)
 
 	err := cache.client.Del(cacheCtx, key).Err()
 	if err != nil {

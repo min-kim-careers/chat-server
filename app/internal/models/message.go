@@ -24,11 +24,11 @@ var validMessageTypes = map[string]bool{
 }
 
 type Message struct {
-	Type      string `json:"message_type" validate:"required"`
-	RoomID    string `json:"room_id" validate:"required"`
-	ClientID  string `json:"client_id" validate:"required"`
+	Type      string `json:"messageType" validate:"required"`
+	ClientID  string `json:"clientId" validate:"required"`
+	RoomID    string `json:"roomId"`
 	Timestamp string `json:"timestamp"`
-	Content   any    `json:"message_content"`
+	Content   any    `json:"messageContent"`
 }
 
 func validateMessage(msg *Message) bool {

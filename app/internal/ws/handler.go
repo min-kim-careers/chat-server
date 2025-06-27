@@ -1,4 +1,4 @@
-package api
+package ws
 
 import (
 	"chat-server/internal/chat"
@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func HandleWebsocketConnection(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
+func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}

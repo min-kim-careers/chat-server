@@ -29,15 +29,16 @@ func NewHub(db *db.DB, cache *cache.Cache) *Hub {
 }
 
 func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *models.Message) {
-	room, roomExists := hub.rooms[connMsg.RoomID]
+	roomID := connMsg.RoomID
+	room, roomExists := hub.rooms[roomID]
 	if !roomExists {
-		newRoom := NewRoom(connMsg.RoomID, hub.cache, hub.db)
-		log.Printf("Room <%s> created.", connMsg.RoomID)
+		newRoom := NewRoom(roomID, hub.cache, hub.db)
+		log.Printf("Room <%s> created.", roomID)
 		hub.register <- newRoom
 		room = newRoom
 		room.Run(hub)
 	} else {
-		log.Printf("Room <%s> found in hub.", connMsg.RoomID)
+		log.Printf("Room <%s> found in hub.", roomID)
 	}
 
 	room.AddClient(wsConn, connMsg.ClientID)
