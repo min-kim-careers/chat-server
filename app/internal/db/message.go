@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (db *DB) CreateMessageTable() error {
+func (db *DB) CreateMessagesTable() error {
 	dbConn, _ := db.AcquireConn()
 	defer dbConn.Release()
 
@@ -27,14 +27,14 @@ func (db *DB) CreateMessageTable() error {
 
 	_, err := dbConn.Exec(context.Background(), q)
 	if err != nil {
-		log.Fatal("Error creating table:", err)
+		log.Fatal("Error creating message table:", err)
 	}
 
-	log.Println("Message table found.")
+	log.Println("Messages table found.")
 	return nil
 }
 
-func (db *DB) Insert(msg *models.Message) bool {
+func (db *DB) InsertMessage(msg *models.Message) bool {
 	dbConn, err := db.AcquireConn()
 	defer dbConn.Release()
 	if err != nil {
@@ -56,7 +56,7 @@ func (db *DB) Insert(msg *models.Message) bool {
 	return true
 }
 
-func (db *DB) BulkInsert(msgs []*models.Message) bool {
+func (db *DB) BulkInsertMessages(msgs []*models.Message) bool {
 	if len(msgs) == 0 {
 		log.Println("No messages to persist")
 		return false
@@ -94,7 +94,7 @@ func (db *DB) BulkInsert(msgs []*models.Message) bool {
 	return true
 }
 
-func (db *DB) Restore(roomID, timestamp string, limit int) []*models.Message {
+func (db *DB) RestoreMessages(roomID, timestamp string, limit int) []*models.Message {
 	if roomID == "" || timestamp == "" || limit <= 0 {
 		log.Println("Invalid parameters passed to Restore")
 		return nil
