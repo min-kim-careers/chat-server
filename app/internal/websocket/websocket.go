@@ -1,4 +1,4 @@
-package ws
+package websocket
 
 import (
 	"chat-server/internal/chat"
@@ -9,10 +9,30 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func getToken(r *http.Request) (string, bool) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		return "", false
+	}
+	return token, true
+}
+
 func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
+
+	// token, ok := getToken(r)
+	// if !ok {
+	// 	log.Printf("Auth token missing")
+	// 	return
+	// }
+
+	// _, ok = auth.VerifyToken(token)
+	// if !ok {
+	// 	log.Printf("Authentication failed")
+	// 	return
+	// }
 
 	wsConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -36,5 +56,4 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 	}
 
 	hub.HandleWsConnection(wsConn, connMsg)
-
 }

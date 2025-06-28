@@ -42,6 +42,10 @@ services:
       - CACHE_PORT=6379
       - CACHE_PASSWORD=REDACTED
       - CACHE_DB=0
+
+      - AUTH_URL=http://auth-service:8000
+      - AUTH_KEY=b6c54fe621c6df75a54f0c245956519251adae29c2a0fa1c7f1cc03674f61ce5
+      - AUTH_KEY_HEADER=x-auth-key
     env_file:
       - .env
     volumes:
