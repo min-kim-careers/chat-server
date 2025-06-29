@@ -1,9 +1,8 @@
 package chat
 
 import (
-	"chat-server/internal/cache"
-	"chat-server/internal/db"
-	"chat-server/internal/models"
+	"chat-server/internal/dto"
+	"context"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -14,54 +13,52 @@ type Room struct {
 	clients    map[string]*Client
 	register   chan *Client
 	unregister chan *Client
-	cache      *cache.Cache
-	db         *db.DB
+	hub        *Hub
 }
 
-func NewRoom(id string, cache *cache.Cache, db *db.DB) *Room {
+func NewRoom(id string, hub *Hub) *Room {
 	return &Room{
 		id:         id,
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		cache:      cache,
-		db:         db,
+		hub:        hub,
 	}
 }
 
-func (room *Room) AddClient(wsConn *websocket.Conn, clientID string) {
-	newClient := NewClient(clientID, wsConn)
-	room.register <- newClient
-	newClient.Run(room)
+func (r *Room) AddClient(ctx context.Context, conn *websocket.Conn, clientID string) {
+	newClient := NewClient(ctx, conn, clientID, r)
+	r.register <- newClient
+	newClient.Run(r)
 }
 
-func (room *Room) HandleRegistrations(hub *Hub) {
+func (r *Room) HandleRegistrations(hub *Hub) {
 	for {
 		select {
-		case c := <-room.register:
-			room.clients[c.id] = c
-			log.Printf("Client <%s> connected to room <%s>.", c.id, room.id)
+		case c := <-r.register:
+			r.clients[c.id] = c
+			log.Printf("Client <%s> connected to room <%s>.", c.id, r.id)
 
-		case c := <-room.unregister:
-			if _, exists := room.clients[c.id]; exists {
-				delete(room.clients, c.id)
-				log.Printf("Client <%s> disconnected from room <%s>.", c.id, room.id)
+		case c := <-r.unregister:
+			if _, exists := r.clients[c.id]; exists {
+				delete(r.clients, c.id)
+				log.Printf("Client <%s> disconnected from room <%s>.", c.id, r.id)
 			}
 
-			if len(room.clients) == 0 {
-				log.Printf("Room <%s> is empty. Requesting removal from hub.", room.id)
-				hub.unregister <- room
+			if len(r.clients) == 0 {
+				log.Printf("Room <%s> is empty. Requesting removal from hub.", r.id)
+				hub.unregister <- r
 				return
 			}
 		}
 	}
 }
 
-func (room *Room) HandleClients(hub *Hub) {
-	pubsub := hub.cache.PubSub(room.id)
+func (r *Room) HandleClients(ctx context.Context, hub *Hub) {
+	pubsub := hub.deps.Cache.PubSub(ctx, r.id)
 	if pubsub == nil {
-		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", room.id)
-		hub.unregister <- room
+		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", r.id)
+		hub.unregister <- r
 		return
 	}
 	defer pubsub.Close()
@@ -71,13 +68,13 @@ func (room *Room) HandleClients(hub *Hub) {
 	for data := range channel {
 		msgJson := []byte(data.Payload)
 
-		msg := models.DeserializeMessage(msgJson)
+		msg := dto.DeserializeMessage(msgJson)
 		if msg == nil {
-			log.Printf("Error deserializing message in room <%s>. Message: %s", room.id, msgJson)
+			log.Printf("Error deserializing message in room <%s>. Message: %s", r.id, msgJson)
 			continue
 		}
 
-		for clientID, client := range room.clients {
+		for clientID, client := range r.clients {
 			if clientID == msg.ClientID {
 				continue
 			}
@@ -87,7 +84,7 @@ func (room *Room) HandleClients(hub *Hub) {
 	}
 }
 
-func (room *Room) Run(hub *Hub) {
-	go room.HandleRegistrations(hub)
-	go room.HandleClients(hub)
+func (r *Room) Run(ctx context.Context, hub *Hub) {
+	go r.HandleRegistrations(hub)
+	go r.HandleClients(ctx, hub)
 }

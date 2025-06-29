@@ -1,66 +1,64 @@
 package chat
 
 import (
+	"context"
 	"log"
 
-	"chat-server/internal/cache"
-	"chat-server/internal/db"
-	"chat-server/internal/models"
+	"chat-server/internal/deps"
+	"chat-server/internal/dto"
 
 	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
-	db         *db.DB
-	cache      *cache.Cache
+	deps       *deps.Container
 	rooms      map[string]*Room
 	register   chan *Room
 	unregister chan *Room
 }
 
-func NewHub(db *db.DB, cache *cache.Cache) *Hub {
+func NewHub(deps *deps.Container) *Hub {
 	return &Hub{
-		db:         db,
-		cache:      cache,
+		deps:       deps,
 		rooms:      make(map[string]*Room),
 		register:   make(chan *Room),
 		unregister: make(chan *Room),
 	}
 }
 
-func (hub *Hub) HandleWsConnection(wsConn *websocket.Conn, connMsg *models.Message) {
-	roomID := connMsg.RoomID
-	room, roomExists := hub.rooms[roomID]
+func (h *Hub) HandleConnection(ctx context.Context, conn *websocket.Conn, message *dto.Message) {
+	roomID := message.RoomID
+	room, roomExists := h.rooms[roomID]
 	if !roomExists {
-		newRoom := NewRoom(roomID, hub.cache, hub.db)
+		newRoom := NewRoom(roomID, h)
 		log.Printf("Room <%s> created.", roomID)
-		hub.register <- newRoom
+		h.register <- newRoom
 		room = newRoom
-		room.Run(hub)
+		room.Run(ctx, h)
 	} else {
 		log.Printf("Room <%s> found in hub.", roomID)
 	}
 
-	room.AddClient(wsConn, connMsg.ClientID)
+	room.AddClient(ctx, conn, message.ClientID)
 }
 
-func (hub *Hub) HandleRegistrations() {
+func (h *Hub) HandleRegistrations() {
 	for {
 		select {
 
-		case room := <-hub.register:
-			hub.rooms[room.id] = room
+		case room := <-h.register:
+			h.rooms[room.id] = room
 			log.Printf("Room <%s> registered to hub.", room.id)
 
-		case room := <-hub.unregister:
-			if _, exists := hub.rooms[room.id]; exists {
-				delete(hub.rooms, room.id)
+		case room := <-h.unregister:
+			if _, exists := h.rooms[room.id]; exists {
+				delete(h.rooms, room.id)
 				log.Printf("Room <%s> unregistered from hub.", room.id)
 			}
 		}
 	}
 }
 
-func (hub *Hub) Run() {
-	go hub.HandleRegistrations()
+func (h *Hub) Run() {
+	go h.HandleRegistrations()
 }

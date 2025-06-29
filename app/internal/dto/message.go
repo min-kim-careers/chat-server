@@ -1,9 +1,9 @@
-package models
+package dto
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -14,21 +14,15 @@ var validMessageTypes = map[string]bool{
 	"chat":       true,
 	"restore":    true,
 	"empty":      true,
-
-	// "enter":      true,
-	// "leave":      true,
-	// "typing":     true,
-	// "edit":       true,
-	// "delete":     true,
-
 }
 
 type Message struct {
-	Type      string `json:"messageType" validate:"required"`
-	ClientID  string `json:"clientId" validate:"required"`
-	RoomID    string `json:"roomId"`
-	Timestamp string `json:"timestamp"`
-	Content   any    `json:"messageContent"`
+	ID          int             `json:"id"`
+	MessageType string          `json:"messageType"`
+	RoomID      string          `json:"roomId"`
+	ClientID    string          `json:"clientId"`
+	CreatedAt   time.Time       `json:"createdAt"`
+	Data        json.RawMessage `json:"data"`
 }
 
 func validateMessage(msg *Message) bool {
@@ -40,9 +34,9 @@ func validateMessage(msg *Message) bool {
 		return false
 	}
 
-	_, valid := validMessageTypes[msg.Type]
+	_, valid := validMessageTypes[msg.MessageType]
 	if !valid {
-		log.Println("Invalid message type:", msg.Type)
+		log.Println("Invalid message type:", msg.MessageType)
 		return false
 	}
 
@@ -76,21 +70,21 @@ func SerializeMessage(m *Message) []byte {
 	return data
 }
 
-func PrintMessage(m *Message) {
-	res, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		log.Println("Error printing message:", err)
-		return
-	}
-	log.Println(res)
-}
+// func PrintMessage(m *MessageDTO) {
+// 	res, err := json.MarshalIndent(m, "", "  ")
+// 	if err != nil {
+// 		log.Println("Error printing message:", err)
+// 		return
+// 	}
+// 	log.Println(res)
+// }
 
-func PrintJson(j []byte) {
-	var buffer bytes.Buffer
-	err := json.Indent(&buffer, j, "", "\t")
-	if err != nil {
-		log.Println("Error prettifying JSON:", j)
-		return
-	}
-	log.Println(buffer.String())
-}
+// func PrintJson(j []byte) {
+// 	var buffer bytes.Buffer
+// 	err := json.Indent(&buffer, j, "", "\t")
+// 	if err != nil {
+// 		log.Println("Error prettifying JSON:", j)
+// 		return
+// 	}
+// 	log.Println(buffer.String())
+// }

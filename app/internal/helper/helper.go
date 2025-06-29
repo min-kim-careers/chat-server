@@ -1,21 +1,22 @@
-package utils
+package helper
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"time"
 
-	"chat-server/internal/models"
+	"chat-server/internal/constant"
+	"chat-server/internal/dto"
 )
 
 var ISOTimestampLayout = "2006-01-02T15:04:05.999Z"
 
-func partition(arr []*models.Message, low, high int) ([]*models.Message, int) {
+func partition(arr []*dto.Message, low, high int) ([]*dto.Message, int) {
 	pivot := arr[high]
 	i := low
 	for j := low; j < high; j++ {
-		t1, _ := time.Parse(ISOTimestampLayout, arr[j].Timestamp)
-		t2, _ := time.Parse(ISOTimestampLayout, pivot.Timestamp)
+		t1 := arr[j].CreatedAt
+		t2 := pivot.CreatedAt
 		if t1.Before(t2) {
 			arr[i], arr[j] = arr[j], arr[i]
 			i++
@@ -25,7 +26,7 @@ func partition(arr []*models.Message, low, high int) ([]*models.Message, int) {
 	return arr, i
 }
 
-func quickSort(arr []*models.Message, low, high int) []*models.Message {
+func quickSort(arr []*dto.Message, low, high int) []*dto.Message {
 	if low < high {
 		var p int
 		arr, p = partition(arr, low, high)
@@ -35,11 +36,11 @@ func quickSort(arr []*models.Message, low, high int) []*models.Message {
 	return arr
 }
 
-func QuickSortStart(msgs []*models.Message) []*models.Message {
+func QuickSortStart(msgs []*dto.Message) []*dto.Message {
 	return quickSort(msgs, 0, len(msgs)-1)
 }
 
-func ReverseOrder(msgs []*models.Message) []*models.Message {
+func ReverseOrder(msgs []*dto.Message) []*dto.Message {
 	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
 		msgs[i], msgs[j] = msgs[j], msgs[i]
 	}
@@ -47,7 +48,7 @@ func ReverseOrder(msgs []*models.Message) []*models.Message {
 }
 
 func ConvertTimestamp(timestamp string) float64 {
-	t, err := time.Parse(TIMESTAMP_FORMAT, timestamp)
+	t, err := time.Parse(constant.TIME_FORMAT, timestamp)
 	if err != nil {
 		return 0
 	}

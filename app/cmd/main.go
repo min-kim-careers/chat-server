@@ -2,10 +2,10 @@ package main
 
 import (
 	"chat-server/internal/api"
-	"chat-server/internal/cache"
 	"chat-server/internal/chat"
-	"chat-server/internal/db"
-	"chat-server/internal/websocket"
+	"chat-server/internal/deps"
+	"chat-server/internal/handler"
+	"context"
 	"flag"
 	"log"
 	"net/http"
@@ -14,20 +14,15 @@ import (
 )
 
 func main() {
-	// Database
-	newDB := db.NewDB()
-	newDB.CreateMessagesTable()
-	log.Println("DB init successful.")
-
-	// Cache
-	newCache := cache.NewCache()
-	log.Println("Cache init successful.")
+	// Dependencies
+	ctx := context.Background()
+	deps := deps.NewContainer(ctx)
 
 	// Hub
-	newHub := chat.NewHub(newDB, newCache)
+	hub := chat.NewHub(deps)
 	log.Println("Hub created.")
 
-	newHub.Run()
+	hub.Run()
 	log.Println("Hub running.")
 
 	apiAddr := flag.String("apiAddr", ":8081", "API server address")
@@ -37,7 +32,8 @@ func main() {
 	// API server
 	go func() {
 		router := gin.Default()
-		api.RegisterMessageRoutes(router.Group("/messages"), newCache, newDB)
+		api.RegisterMessageRoutes(router.Group("/message"), deps)
+		api.RegisterRoomRoutes(router.Group("/room"), deps)
 		log.Println("Chat API server running on", *apiAddr)
 		if err := router.Run(*apiAddr); err != nil {
 			panic(err)
@@ -46,7 +42,7 @@ func main() {
 
 	// WS server
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		websocket.WebsocketHandler(w, r, newHub)
+		handler.WebsocketHandler(w, r, hub)
 	})
 	log.Println("Chat WS server running on", *wsAddr)
 	if err := http.ListenAndServe(*wsAddr, nil); err != nil {

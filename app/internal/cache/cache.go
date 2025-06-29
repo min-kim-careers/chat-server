@@ -8,24 +8,22 @@ import (
 	"os"
 	"strconv"
 
-	"chat-server/internal/models"
+	"chat-server/internal/dto"
 
 	"github.com/redis/go-redis/v9"
 )
-
-var cacheCtx = context.Background()
 
 type Cache struct {
 	client *redis.Client
 }
 
-func NewCache() *Cache {
+func NewCache(ctx context.Context) *Cache {
 	return &Cache{
-		client: initCacheClient(),
+		client: initCacheClient(ctx),
 	}
 }
 
-func initCacheClient() *redis.Client {
+func initCacheClient(ctx context.Context) *redis.Client {
 	cacheHost := os.Getenv("CACHE_HOST")
 	cachePort := os.Getenv("CACHE_PORT")
 	cachePassword := os.Getenv("CACHE_PASSWORD")
@@ -46,7 +44,7 @@ func initCacheClient() *redis.Client {
 		DB:       redisDB,
 	})
 
-	_, err = client.Ping(cacheCtx).Result()
+	_, err = client.Ping(ctx).Result()
 	if err != nil {
 		log.Fatal("Could not connect to cache server:", err)
 	}
@@ -59,20 +57,20 @@ func roomKey(roomID string) string {
 	return "chat:room:" + roomID
 }
 
-func (cache *Cache) PubSub(roomID string) *redis.PubSub {
+func (c *Cache) PubSub(ctx context.Context, roomID string) *redis.PubSub {
 	key := roomKey(roomID)
 
-	pubsub := cache.client.Subscribe(cacheCtx, key)
+	pubsub := c.client.Subscribe(ctx, key)
 	if pubsub == nil {
 		log.Println("Error subscribing to room: ", key)
 	}
 	return pubsub
 }
 
-func (cache *Cache) Publish(roomID string, msgJson []byte) bool {
+func (c *Cache) Publish(ctx context.Context, roomID string, msgJson []byte) bool {
 	key := roomKey(roomID)
 
-	err := cache.client.Publish(cacheCtx, key, msgJson).Err()
+	err := c.client.Publish(ctx, key, msgJson).Err()
 	if err != nil {
 		log.Printf("Error publishing following message to room <%s>: %v", key, err)
 		return false
@@ -82,10 +80,10 @@ func (cache *Cache) Publish(roomID string, msgJson []byte) bool {
 	return true
 }
 
-func (cache *Cache) IsFull(roomID string, cacheLimit int64) bool {
+func (c *Cache) IsFull(ctx context.Context, roomID string, cacheLimit int64) bool {
 	key := roomKey(roomID)
 
-	count, err := cache.client.LLen(cacheCtx, key).Result()
+	count, err := c.client.LLen(ctx, key).Result()
 	if err != nil {
 		log.Printf("Error checking if cache is full <%s>: %v", roomID, err)
 		return false
@@ -94,10 +92,10 @@ func (cache *Cache) IsFull(roomID string, cacheLimit int64) bool {
 	return count >= cacheLimit
 }
 
-func (cache *Cache) Add(roomID string, msgJson []byte) bool {
+func (c *Cache) Add(ctx context.Context, roomID string, msgJson []byte) bool {
 	key := roomKey(roomID)
 
-	_, err := cache.client.RPush(cacheCtx, key, msgJson).Result()
+	_, err := c.client.RPush(ctx, key, msgJson).Result()
 	if err != nil {
 		log.Printf("Error caching message in room <%s>: %s", roomID, err)
 		return false
@@ -107,19 +105,19 @@ func (cache *Cache) Add(roomID string, msgJson []byte) bool {
 	return true
 }
 
-func (cache *Cache) Restore(roomID string, limit int64) []*models.Message {
+func (c *Cache) Restore(ctx context.Context, roomID string, limit int64) []*dto.Message {
 	key := roomKey(roomID)
 
-	cachedMsgs, err := cache.client.LRange(cacheCtx, key, -limit, -1).Result()
+	cachedMsgs, err := c.client.LRange(ctx, key, -limit, -1).Result()
 	if err != nil {
 		log.Printf("Error restoring cached messages for room <%s>: %v", roomID, err)
 		return nil
 	}
 
-	msgs := []*models.Message{}
+	msgs := []*dto.Message{}
 
 	for _, cachedMsg := range cachedMsgs {
-		var msg models.Message
+		var msg dto.Message
 		err = json.Unmarshal([]byte(cachedMsg), &msg)
 		if err != nil {
 			log.Println("Error unmarshalling cached messages:", err)
@@ -132,10 +130,10 @@ func (cache *Cache) Restore(roomID string, limit int64) []*models.Message {
 	return msgs
 }
 
-func (cache *Cache) Clear(roomID string) {
+func (c *Cache) Clear(ctx context.Context, roomID string) {
 	key := roomKey(roomID)
 
-	err := cache.client.Del(cacheCtx, key).Err()
+	err := c.client.Del(ctx, key).Err()
 	if err != nil {
 		log.Printf("Error clearing messages for room <%s>: %v", roomID, err)
 	}
