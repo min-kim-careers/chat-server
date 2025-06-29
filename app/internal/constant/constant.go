@@ -1,7 +1,7 @@
-package utils
+package constant
 
 import "time"
 
 const CACHE_LIMIT = 5
 const RESTORE_LIMIT = 10
-const TIMESTAMP_FORMAT = time.RFC3339
+const TIME_FORMAT = time.RFC3339

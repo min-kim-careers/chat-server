@@ -11,19 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var dbCtx = context.Background()
-
 type DB struct {
-	pool *pgxpool.Pool
+	DBPool *pgxpool.Pool
 }
 
-func NewDB() *DB {
+func NewDB(ctx context.Context) *DB {
 	return &DB{
-		pool: initDBPool(),
+		DBPool: initDBPool(ctx),
 	}
 }
 
-func initDBPool() *pgxpool.Pool {
+func initDBPool(ctx context.Context) *pgxpool.Pool {
 	const defaultMaxConns = int32(4)
 	const defaultMinConns = int32(0)
 	const defaultMaxConnLifetime = time.Hour
@@ -69,18 +67,10 @@ func initDBPool() *pgxpool.Pool {
 		log.Println("Database closing.")
 	}
 
-	dbPool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		log.Fatal("Error while creating a DB pool:", err)
 	}
 
 	return dbPool
-}
-
-func (db *DB) AcquireConn() (*pgxpool.Conn, error) {
-	dbConn, err := db.pool.Acquire(context.Background())
-	if err != nil {
-		log.Println("Error acquiring DB connection:", err)
-	}
-	return dbConn, err
 }

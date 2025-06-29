@@ -2,9 +2,10 @@ package chat
 
 import (
 	"chat-server/internal/cache"
-	"chat-server/internal/db"
-	"chat-server/internal/models"
-	"chat-server/internal/utils"
+	"chat-server/internal/constant"
+	"chat-server/internal/dto"
+	"chat-server/internal/service"
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -13,145 +14,157 @@ import (
 )
 
 type Client struct {
-	id     string
-	wsConn *websocket.Conn
-	lock   sync.Mutex
+	ctx  context.Context
+	conn *websocket.Conn
+	id   string
+	lock sync.Mutex
+	room *Room
 }
 
-func NewClient(id string, wsConn *websocket.Conn) *Client {
+func NewClient(ctx context.Context, conn *websocket.Conn, id string, room *Room) *Client {
 	return &Client{
-		id:     id,
-		wsConn: wsConn,
+		ctx:  ctx,
+		conn: conn,
+		id:   id,
+		room: room,
 	}
 }
 
-func (client *Client) initializeMessages(room *Room) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
-
-	msgs := utils.ReverseOrder(room.cache.Restore(room.id, utils.RESTORE_LIMIT))
-
-	if len(msgs) < utils.RESTORE_LIMIT {
-		var lastTimestamp string
-		if len(msgs) == 0 {
-			lastTimestamp = time.Now().Format(utils.TIMESTAMP_FORMAT)
-		} else {
-			lastTimestamp = msgs[len(msgs)-1].Timestamp
-		}
-
-		delta := utils.RESTORE_LIMIT - len(msgs)
-		dbMsgs := room.db.RestoreMessages(room.id, lastTimestamp, delta)
-		if dbMsgs != nil {
-			msgs = append(msgs, dbMsgs...)
-		}
-	}
-
-	msg := &models.Message{
-		Type:     "restore",
-		RoomID:   room.id,
-		ClientID: client.id,
-		Content:  msgs,
-	}
-
-	msgJson := models.SerializeMessage(msg)
-	if msgJson == nil {
-		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", client.id, room.id)
-		return
-	}
-
-	client.Send(msgJson)
+func (c *Client) services() *service.Services {
+	return c.room.hub.deps.Services
 }
 
-func (client *Client) handleChatMessage(roomID string, msgJson []byte, cache *cache.Cache, db *db.DB) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
+func (c *Client) cache() *cache.Cache {
+	return c.room.hub.deps.Cache
+}
 
-	if !cache.Publish(roomID, msgJson) {
+func (c *Client) initializeMessages(room *Room) {
+	// c.lock.Lock()
+	// defer c.lock.Unlock()
+
+	// msgs := helper.ReverseOrder(room.hub.cache.Restore(room.id, constant.RESTORE_LIMIT))
+
+	// if len(msgs) < constant.RESTORE_LIMIT {
+	// 	var lastTimestamp time.Time
+	// 	if len(msgs) == 0 {
+	// 		lastTimestamp = time.Now().Format(constant.TIMESTAMP_FORMAT)
+	// 	} else {
+	// 		lastTimestamp = msgs[len(msgs)-1].CreatedAt
+	// 	}
+
+	// 	delta := constant.RESTORE_LIMIT - len(msgs)
+	// 	dbMsgs := c.services().RestoreMessages(context.Background())
+	// 	if dbMsgs != nil {
+	// 		msgs = append(msgs, dbMsgs...)
+	// 	}
+	// }
+
+	// msg := &dto.MessageDTO{
+	// 	MessageType: "restore",
+	// 	RoomID:      room.id,
+	// 	ClientID:    c.id,
+	// 	Data:        msgs,
+	// }
+
+	// msgJson := dto.SerializeMessage(msg)
+	// if msgJson == nil {
+	// 	log.Printf("Error restoring cached messages for client <%s> in room <%s>.", c.id, room.id)
+	// 	return
+	// }
+
+	// c.Send(msgJson)
+}
+
+func (c *Client) handleChatMessage(roomID string, msgJson []byte) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if !c.cache().Publish(c.ctx, roomID, msgJson) {
 		return
 	}
 
-	if !cache.Add(roomID, msgJson) {
+	if !c.cache().Add(c.ctx, roomID, msgJson) {
 		return
 	}
 
-	if !cache.IsFull(roomID, utils.CACHE_LIMIT) {
+	if !c.cache().IsFull(c.ctx, roomID, constant.CACHE_LIMIT) {
 		return
 	}
 
-	cachedMsgs := cache.Restore(roomID, utils.RESTORE_LIMIT)
+	cachedMsgs := c.cache().Restore(c.ctx, roomID, constant.RESTORE_LIMIT)
 	if len(cachedMsgs) == 0 {
 		return
 	}
 
-	if !db.BulkInsertMessages(cachedMsgs) {
-		return
-	}
+	// if !c.services().BulkAddMessages(cachedMsgs) {
+	// 	return
+	// }
 
-	cache.Clear(roomID)
+	c.cache().Clear(c.ctx, roomID)
 }
 
-func (client *Client) handleRestoreMessage(roomID, timestamp string, db *db.DB) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
+func (c *Client) handleRestoreMessage(roomID string, timestamp time.Time) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
-	dbMsgs := db.RestoreMessages(roomID, timestamp, utils.RESTORE_LIMIT)
+	// dbMsgs := c.services().RestoreMessages(roomID, timestamp, helper.RESTORE_LIMIT)
+	dbMsgs := []byte{}
 
-	newMsg := &models.Message{
-		Type:     "restore",
-		RoomID:   roomID,
-		ClientID: client.id,
-		Content:  dbMsgs,
+	newMsg := &dto.Message{
+		MessageType: "restore",
+		RoomID:      roomID,
+		ClientID:    c.id,
+		Data:        dbMsgs,
 	}
 
-	msgJson := models.SerializeMessage(newMsg)
+	msgJson := dto.SerializeMessage(newMsg)
 	if msgJson == nil {
-		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", client.id, roomID)
+		log.Printf("Error restoring cached messages for client <%s> in room <%s>.", c.id, roomID)
 		return
 	}
 
-	client.Send(msgJson)
+	c.Send(msgJson)
 }
 
 // Send to client/browser
-func (client *Client) Send(msgJson []byte) {
-	err := client.wsConn.WriteMessage(websocket.TextMessage, msgJson)
+func (c *Client) Send(msgJson []byte) {
+	err := c.conn.WriteMessage(websocket.TextMessage, msgJson)
 	if err != nil {
-		log.Printf("Error sending message to client <%s>: %v", client.id, err)
+		log.Printf("Error sending message to client <%s>: %v", c.id, err)
 	} else {
-		log.Printf("Sent message to client <%s>: %v", client.id, string(msgJson))
+		log.Printf("Sent message to client <%s>: %v", c.id, string(msgJson))
 	}
 }
 
 // Read from client/browser
-func (client *Client) Read(room *Room) {
+func (c *Client) Read(room *Room) {
 	roomID := room.id
-	db := room.db
-	cache := room.cache
 
 	for {
-		_, msgJson, err := client.wsConn.ReadMessage()
+		_, msgJson, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message from client <%s>: %v", client.id, err)
-			room.unregister <- client
+			log.Printf("Error reading message from client <%s>: %v", c.id, err)
+			room.unregister <- c
 			return
 		}
 
-		msg := models.DeserializeMessage(msgJson)
+		msg := dto.DeserializeMessage(msgJson)
 		if msg == nil {
 			continue
 		}
 
-		if msg.Type == "chat" {
-			client.handleChatMessage(roomID, msgJson, cache, db)
-		} else if msg.Type == "restore" {
-			client.handleRestoreMessage(roomID, msg.Timestamp, db)
+		switch msg.MessageType {
+		case "chat":
+			c.handleChatMessage(roomID, msgJson)
+		case "restore":
+			c.handleRestoreMessage(roomID, msg.CreatedAt)
 		}
 
 	}
 }
 
-func (client *Client) Run(room *Room) {
-	client.initializeMessages(room)
+func (c *Client) Run(room *Room) {
+	c.initializeMessages(room)
 
-	go client.Read(room)
+	go c.Read(room)
 }
