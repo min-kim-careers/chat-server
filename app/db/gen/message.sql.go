@@ -13,35 +13,24 @@ import (
 
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO
-  messages (
-    message_type,
-    room_id,
-    client_id,
-    created_at,
-    data
-  )
+  messages (mode, room_id, client_id, created_at, data)
 VALUES
   ($1, $2, $3, $4, $5)
 RETURNING
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data
+  id, mode, room_id, client_id, created_at, data
 `
 
 type CreateMessageParams struct {
-	MessageType string           `json:"message_type"`
-	RoomID      string           `json:"room_id"`
-	ClientID    string           `json:"client_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	Data        []byte           `json:"data"`
+	Mode      string           `json:"mode"`
+	RoomID    pgtype.UUID      `json:"room_id"`
+	ClientID  string           `json:"client_id"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Data      []byte           `json:"data"`
 }
 
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, createMessage,
-		arg.MessageType,
+		arg.Mode,
 		arg.RoomID,
 		arg.ClientID,
 		arg.CreatedAt,
@@ -50,7 +39,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 	var i Message
 	err := row.Scan(
 		&i.ID,
-		&i.MessageType,
+		&i.Mode,
 		&i.RoomID,
 		&i.ClientID,
 		&i.CreatedAt,
@@ -59,24 +48,28 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 	return i, err
 }
 
-const getMessagesByRoomID = `-- name: GetMessagesByRoomID :many
+const getAllMessagesBeforeCreatedAt = `-- name: GetAllMessagesBeforeCreatedAt :many
 SELECT
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data
+  id, mode, room_id, client_id, created_at, data
 FROM
   messages
 WHERE
   room_id = $1
+  AND created_at < $2
 ORDER BY
   created_at
+LIMIT
+  $3
 `
 
-func (q *Queries) GetMessagesByRoomID(ctx context.Context, roomID string) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getMessagesByRoomID, roomID)
+type GetAllMessagesBeforeCreatedAtParams struct {
+	RoomID    pgtype.UUID      `json:"room_id"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Limit     int32            `json:"limit"`
+}
+
+func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllMessagesBeforeCreatedAtParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getAllMessagesBeforeCreatedAt, arg.RoomID, arg.CreatedAt, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +79,7 @@ func (q *Queries) GetMessagesByRoomID(ctx context.Context, roomID string) ([]Mes
 		var i Message
 		if err := rows.Scan(
 			&i.ID,
-			&i.MessageType,
+			&i.Mode,
 			&i.RoomID,
 			&i.ClientID,
 			&i.CreatedAt,
@@ -102,33 +95,19 @@ func (q *Queries) GetMessagesByRoomID(ctx context.Context, roomID string) ([]Mes
 	return items, nil
 }
 
-const getPreviousMessages = `-- name: GetPreviousMessages :many
+const getAllMessagesByRoomID = `-- name: GetAllMessagesByRoomID :many
 SELECT
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data
+  id, mode, room_id, client_id, created_at, data
 FROM
   messages
 WHERE
   room_id = $1
-  AND created_at < $2
 ORDER BY
   created_at
-LIMIT
-  $3
 `
 
-type GetPreviousMessagesParams struct {
-	RoomID    string           `json:"room_id"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-	Limit     int32            `json:"limit"`
-}
-
-func (q *Queries) GetPreviousMessages(ctx context.Context, arg GetPreviousMessagesParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getPreviousMessages, arg.RoomID, arg.CreatedAt, arg.Limit)
+func (q *Queries) GetAllMessagesByRoomID(ctx context.Context, roomID pgtype.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getAllMessagesByRoomID, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +117,7 @@ func (q *Queries) GetPreviousMessages(ctx context.Context, arg GetPreviousMessag
 		var i Message
 		if err := rows.Scan(
 			&i.ID,
-			&i.MessageType,
+			&i.Mode,
 			&i.RoomID,
 			&i.ClientID,
 			&i.CreatedAt,

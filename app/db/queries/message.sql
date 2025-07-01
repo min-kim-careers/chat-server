@@ -1,30 +1,14 @@
 -- name: CreateMessage :one
 INSERT INTO
-  messages (
-    message_type,
-    room_id,
-    client_id,
-    created_at,
-    data
-  )
+  messages (mode, room_id, client_id, created_at, data)
 VALUES
   ($1, $2, $3, $4, $5)
 RETURNING
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data;
+  *;
 
--- name: GetMessagesByRoomID :many
+-- name: GetAllMessagesByRoomID :many
 SELECT
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data
+  *
 FROM
   messages
 WHERE
@@ -32,14 +16,9 @@ WHERE
 ORDER BY
   created_at;
 
--- name: GetPreviousMessages :many
+-- name: GetAllMessagesBeforeCreatedAt :many
 SELECT
-  id,
-  message_type,
-  room_id,
-  client_id,
-  created_at,
-  data
+  *
 FROM
   messages
 WHERE

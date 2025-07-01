@@ -9,20 +9,19 @@ import (
 )
 
 type Message struct {
-	ID          int32            `json:"id"`
-	MessageType string           `json:"message_type"`
-	RoomID      string           `json:"room_id"`
-	ClientID    string           `json:"client_id"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
-	Data        []byte           `json:"data"`
+	ID        int32            `json:"id"`
+	Mode      string           `json:"mode"`
+	RoomID    pgtype.UUID      `json:"room_id"`
+	ClientID  string           `json:"client_id"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Data      []byte           `json:"data"`
 }
 
 type Room struct {
 	ID        pgtype.UUID      `json:"id"`
-	Slug      string           `json:"slug"`
 	ItemID    string           `json:"item_id"`
-	BuyerID   string           `json:"buyer_id"`
-	SellerID  string           `json:"seller_id"`
+	Client1   pgtype.UUID      `json:"client1"`
+	Client2   pgtype.UUID      `json:"client2"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	UpdatedAt pgtype.Timestamp `json:"updated_at"`
 }

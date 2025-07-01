@@ -7,6 +7,9 @@ import (
 
 	"chat-server/internal/constant"
 	"chat-server/internal/dto"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var ISOTimestampLayout = "2006-01-02T15:04:05.999Z"
@@ -48,7 +51,7 @@ func ReverseOrder(msgs []*dto.Message) []*dto.Message {
 }
 
 func ConvertTimestamp(timestamp string) float64 {
-	t, err := time.Parse(constant.TIME_FORMAT, timestamp)
+	t, err := time.Parse(constant.TIME_STANDARD, timestamp)
 	if err != nil {
 		return 0
 	}
@@ -59,4 +62,20 @@ func ConvertTimestamp(timestamp string) float64 {
 func HashString(s string) string {
 	hash := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(hash[:])
+}
+
+func ToPGUUIDs(ids []uuid.UUID) []pgtype.UUID {
+	pgUUIDs := make([]pgtype.UUID, len(ids))
+	for i, u := range ids {
+		pgUUIDs[i] = pgtype.UUID{Bytes: u, Valid: true}
+	}
+	return pgUUIDs
+}
+
+func ToGoogleUUIDs(ids []pgtype.UUID) []uuid.UUID {
+	gUUIDs := make([]uuid.UUID, len(ids))
+	for i, c := range ids {
+		gUUIDs[i] = c.Bytes
+	}
+	return gUUIDs
 }

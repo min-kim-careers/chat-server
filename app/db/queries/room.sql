@@ -1,27 +1,33 @@
 -- name: CreateRoom :one
 INSERT INTO
-  rooms (slug, item_id, buyer_id, seller_id)
+  rooms (item_id, client1, client2)
 VALUES
-  ($1, $2, $3, $4)
+  ($1, $2, $3)
 RETURNING
-  id,
-  slug,
-  item_id,
-  buyer_id,
-  seller_id,
-  created_at,
-  updated_at;
+  *;
 
--- name: GetRoomBySlug :one
+-- name: GetRoomById :one
 SELECT
-  id,
-  slug,
-  item_id,
-  buyer_id,
-  seller_id,
-  created_at,
-  updated_at
+  *
 FROM
   rooms
 WHERE
-  slug = $1;
+  id = $1;
+
+-- name: GetAllRoomsByClient :many
+SELECT
+  *
+FROM
+  rooms
+WHERE
+  $1::uuid IN (client1, client2);
+
+-- name: GetRoomByItemAndClients :one
+SELECT
+  *
+FROM
+  rooms
+WHERE
+  item_id = $1
+  AND client1 = $2
+  AND client2 = $3;

@@ -1,7 +1,7 @@
 CREATE TABLE messages (
   id SERIAL PRIMARY KEY,
-  message_type VARCHAR(255) NOT NULL,
-  room_id VARCHAR(255) NOT NULL REFERENCES rooms(id),
+  mode VARCHAR(255) NOT NULL,
+  room_id UUID NOT NULL REFERENCES rooms(id),
   client_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   data JSONB DEFAULT '{}'

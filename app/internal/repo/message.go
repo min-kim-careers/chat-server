@@ -2,16 +2,17 @@ package repo
 
 import (
 	"chat-server/db/gen"
+	"context"
 )
 
 type MessageRepo struct {
-	queries *gen.Queries
+	q *gen.Queries
 }
 
-func NewMessageRepo(queries *gen.Queries) *MessageRepo {
-	return &MessageRepo{queries: queries}
+func NewMessageRepo(q *gen.Queries) *MessageRepo {
+	return &MessageRepo{q: q}
 }
 
-func (r *MessageRepo) Queries() *gen.Queries {
-	return r.queries
+func (r *MessageRepo) GetPreviousMessages(ctx context.Context, arg gen.GetAllMessagesBeforeCreatedAtParams) ([]gen.Message, error) {
+	return r.q.GetAllMessagesBeforeCreatedAt(ctx, arg)
 }
