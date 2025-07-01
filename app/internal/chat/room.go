@@ -5,60 +5,54 @@ import (
 	"context"
 	"log"
 
-	"github.com/gorilla/websocket"
+	"github.com/google/uuid"
 )
 
-type Room struct {
-	id         string
-	clients    map[string]*Client
-	register   chan *Client
-	unregister chan *Client
-	hub        *Hub
-}
-
-func NewRoom(id string, hub *Hub) *Room {
+func NewRoom(hub *Hub, id uuid.UUID) *Room {
 	return &Room{
-		id:         id,
-		clients:    make(map[string]*Client),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		hub:        hub,
+		Hub:        hub,
+		ID:         id,
+		Clients:    make(map[string]*Client),
+		Register:   make(chan *Client),
+		Unregister: make(chan *Client),
 	}
 }
 
-func (r *Room) AddClient(ctx context.Context, conn *websocket.Conn, clientID string) {
-	newClient := NewClient(ctx, conn, clientID, r)
-	r.register <- newClient
-	newClient.Run(r)
+func (r *Room) AddClient(client *Client) {
+	r.Register <- client
+	client.Run(r)
 }
 
-func (r *Room) HandleRegistrations(hub *Hub) {
+func (r *Room) HandleRegistrations() {
 	for {
 		select {
-		case c := <-r.register:
-			r.clients[c.id] = c
-			log.Printf("Client <%s> connected to room <%s>.", c.id, r.id)
+		case c := <-r.Register:
+			r.Clients[c.id] = c
+			log.Printf("Client <%s> joined room <%s>.", c.id, r.ID)
 
-		case c := <-r.unregister:
-			if _, exists := r.clients[c.id]; exists {
-				delete(r.clients, c.id)
-				log.Printf("Client <%s> disconnected from room <%s>.", c.id, r.id)
+		case c := <-r.Unregister:
+			if _, exists := r.Clients[c.id]; exists {
+				delete(r.Clients, c.id)
+				log.Printf("Client <%s> left room <%s>.", c.id, r.ID)
 			}
 
-			if len(r.clients) == 0 {
-				log.Printf("Room <%s> is empty. Requesting removal from hub.", r.id)
-				hub.unregister <- r
+			if len(r.Clients) == 0 {
+				log.Printf("Room <%s> is empty. Requesting removal from hub.", r.ID)
+				r.Hub.RoomUnregister <- r
 				return
 			}
 		}
 	}
 }
 
-func (r *Room) HandleClients(ctx context.Context, hub *Hub) {
-	pubsub := hub.deps.Cache.PubSub(ctx, r.id)
+func (r *Room) HandleClients() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pubsub := r.Hub.Deps.Cache.PubSub(ctx, r.ID.String())
 	if pubsub == nil {
-		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", r.id)
-		hub.unregister <- r
+		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", r.ID)
+		r.Hub.RoomUnregister <- r
 		return
 	}
 	defer pubsub.Close()
@@ -70,11 +64,11 @@ func (r *Room) HandleClients(ctx context.Context, hub *Hub) {
 
 		msg := dto.DeserializeMessage(msgJson)
 		if msg == nil {
-			log.Printf("Error deserializing message in room <%s>. Message: %s", r.id, msgJson)
+			log.Printf("Error deserializing message in room <%s>. Message: %s", r.ID, msgJson)
 			continue
 		}
 
-		for clientID, client := range r.clients {
+		for clientID, client := range r.Clients {
 			if clientID == msg.ClientID {
 				continue
 			}
@@ -82,9 +76,10 @@ func (r *Room) HandleClients(ctx context.Context, hub *Hub) {
 			client.Send(msgJson)
 		}
 	}
+
 }
 
-func (r *Room) Run(ctx context.Context, hub *Hub) {
-	go r.HandleRegistrations(hub)
-	go r.HandleClients(ctx, hub)
+func (r *Room) Run() {
+	go r.HandleRegistrations()
+	go r.HandleClients()
 }

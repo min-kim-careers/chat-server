@@ -7,74 +7,123 @@ package gen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createRoom = `-- name: CreateRoom :one
 INSERT INTO
-  rooms (slug, item_id, buyer_id, seller_id)
+  rooms (item_id, client1, client2)
 VALUES
-  ($1, $2, $3, $4)
+  ($1, $2, $3)
 RETURNING
-  id,
-  slug,
-  item_id,
-  buyer_id,
-  seller_id,
-  created_at,
-  updated_at
+  id, item_id, client1, client2, created_at, updated_at
 `
 
 type CreateRoomParams struct {
-	Slug     string `json:"slug"`
-	ItemID   string `json:"item_id"`
-	BuyerID  string `json:"buyer_id"`
-	SellerID string `json:"seller_id"`
+	ItemID  string      `json:"item_id"`
+	Client1 pgtype.UUID `json:"client1"`
+	Client2 pgtype.UUID `json:"client2"`
 }
 
 func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, error) {
-	row := q.db.QueryRow(ctx, createRoom,
-		arg.Slug,
-		arg.ItemID,
-		arg.BuyerID,
-		arg.SellerID,
-	)
+	row := q.db.QueryRow(ctx, createRoom, arg.ItemID, arg.Client1, arg.Client2)
 	var i Room
 	err := row.Scan(
 		&i.ID,
-		&i.Slug,
 		&i.ItemID,
-		&i.BuyerID,
-		&i.SellerID,
+		&i.Client1,
+		&i.Client2,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getRoomBySlug = `-- name: GetRoomBySlug :one
+const getAllRoomsByClient = `-- name: GetAllRoomsByClient :many
 SELECT
-  id,
-  slug,
-  item_id,
-  buyer_id,
-  seller_id,
-  created_at,
-  updated_at
+  id, item_id, client1, client2, created_at, updated_at
 FROM
   rooms
 WHERE
-  slug = $1
+  $1::uuid IN (client1, client2)
 `
 
-func (q *Queries) GetRoomBySlug(ctx context.Context, slug string) (Room, error) {
-	row := q.db.QueryRow(ctx, getRoomBySlug, slug)
+func (q *Queries) GetAllRoomsByClient(ctx context.Context, dollar_1 pgtype.UUID) ([]Room, error) {
+	rows, err := q.db.Query(ctx, getAllRoomsByClient, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Room
+	for rows.Next() {
+		var i Room
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.Client1,
+			&i.Client2,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRoomById = `-- name: GetRoomById :one
+SELECT
+  id, item_id, client1, client2, created_at, updated_at
+FROM
+  rooms
+WHERE
+  id = $1
+`
+
+func (q *Queries) GetRoomById(ctx context.Context, id pgtype.UUID) (Room, error) {
+	row := q.db.QueryRow(ctx, getRoomById, id)
 	var i Room
 	err := row.Scan(
 		&i.ID,
-		&i.Slug,
 		&i.ItemID,
-		&i.BuyerID,
-		&i.SellerID,
+		&i.Client1,
+		&i.Client2,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRoomByItemAndClients = `-- name: GetRoomByItemAndClients :one
+SELECT
+  id, item_id, client1, client2, created_at, updated_at
+FROM
+  rooms
+WHERE
+  item_id = $1
+  AND client1 = $2
+  AND client2 = $3
+`
+
+type GetRoomByItemAndClientsParams struct {
+	ItemID  string      `json:"item_id"`
+	Client1 pgtype.UUID `json:"client1"`
+	Client2 pgtype.UUID `json:"client2"`
+}
+
+func (q *Queries) GetRoomByItemAndClients(ctx context.Context, arg GetRoomByItemAndClientsParams) (Room, error) {
+	row := q.db.QueryRow(ctx, getRoomByItemAndClients, arg.ItemID, arg.Client1, arg.Client2)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.ItemID,
+		&i.Client1,
+		&i.Client2,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -1,15 +1,18 @@
 package service
 
 import (
+	"chat-server/db"
 	"chat-server/internal/repo"
 )
 
 type Services struct {
-	MessageService *MessageService
+	Message *MessageService
+	Room    *RoomService
 }
 
-func NewServices(r *repo.Repos) *Services {
+func NewServices(r *repo.Repos, db *db.DB) *Services {
 	return &Services{
-		MessageService: NewMessageService(r.Message),
+		Message: NewMessageService(r.Message),
+		Room:    NewRoomService(r.Room, db),
 	}
 }

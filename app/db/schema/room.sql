@@ -1,10 +1,9 @@
 CREATE TABLE rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug TEXT UNIQUE NOT NULL,
   item_id TEXT NOT NULL,
-  buyer_id TEXT NOT NULL,
-  seller_id TEXT NOT NULL,
+  client1 UUID NOT NULL,
+  client2 UUID NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(item_id, buyer_id, seller_id)
+  CONSTRAINT uniq_item_clients UNIQUE (item_id, client1, client2)
 );

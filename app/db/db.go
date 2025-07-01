@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -73,4 +74,24 @@ func initDBPool(ctx context.Context) *pgxpool.Pool {
 	}
 
 	return dbPool
+}
+
+//go:embed schema/message.sql
+var messageSQL string
+
+func (d *DB) RunMessageSchemaSQL(ctx context.Context) {
+	_, err := d.DBPool.Exec(ctx, messageSQL)
+	if err != nil {
+		log.Fatalf("error creating message table: %v", err)
+	}
+}
+
+//go:embed schema/room.sql
+var roomSQL string
+
+func (d *DB) RunRoomSchemaSQL(ctx context.Context) {
+	_, err := d.DBPool.Exec(ctx, roomSQL)
+	if err != nil {
+		log.Fatalf("error creating room table: %v", err)
+	}
 }

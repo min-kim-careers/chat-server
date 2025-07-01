@@ -3,7 +3,6 @@ package dto
 import (
 	"encoding/json"
 	"log"
-	"time"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -16,15 +15,6 @@ var validMessageTypes = map[string]bool{
 	"empty":      true,
 }
 
-type Message struct {
-	ID          int             `json:"id"`
-	MessageType string          `json:"messageType"`
-	RoomID      string          `json:"roomId"`
-	ClientID    string          `json:"clientId"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	Data        json.RawMessage `json:"data"`
-}
-
 func validateMessage(msg *Message) bool {
 	validate := validator.New()
 
@@ -34,9 +24,9 @@ func validateMessage(msg *Message) bool {
 		return false
 	}
 
-	_, valid := validMessageTypes[msg.MessageType]
+	_, valid := validMessageTypes[msg.Mode]
 	if !valid {
-		log.Println("Invalid message type:", msg.MessageType)
+		log.Println("Invalid message type:", msg.Mode)
 		return false
 	}
 
@@ -54,6 +44,7 @@ func DeserializeMessage(jsonData []byte) *Message {
 	}
 
 	if !validateMessage(&msg) {
+		log.Println("Error validating message:", string(jsonData))
 		return nil
 	}
 
@@ -68,6 +59,14 @@ func SerializeMessage(m *Message) []byte {
 	}
 
 	return data
+}
+
+func EncodeRaw(arr []Message) (json.RawMessage, error) {
+	b, err := json.Marshal(arr)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
 }
 
 // func PrintMessage(m *MessageDTO) {

@@ -8,15 +8,16 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type MessageService struct {
-	Repo *repo.MessageRepo
+	r *repo.MessageRepo
 }
 
 func NewMessageService(r *repo.MessageRepo) *MessageService {
-	return &MessageService{Repo: r}
+	return &MessageService{r: r}
 }
 
 func (s *MessageService) SendMessage(ctx context.Context, input dto.Message) {
@@ -25,29 +26,21 @@ func (s *MessageService) SendMessage(ctx context.Context, input dto.Message) {
 
 func ToMessageDto(m gen.Message) dto.Message {
 	return dto.Message{
-		ID:          int(m.ID),
-		MessageType: m.MessageType,
-		RoomID:      m.RoomID,
-		ClientID:    m.ClientID,
-		CreatedAt:   m.CreatedAt.Time,
-		Data:        m.Data,
+		ID:        int(m.ID),
+		Mode:      m.Mode,
+		RoomID:    m.RoomID.Bytes,
+		ClientID:  m.ClientID,
+		CreatedAt: m.CreatedAt.Time,
+		Data:      m.Data,
 	}
 }
 
-type GetPreviousMessagesParams struct {
-	RoomID    string    `json:"room_id"`
-	CreatedAt time.Time `json:"created_at"`
-	Limit     int       `json:"limit"`
-}
-
-func (s *MessageService) GetPreviousMessages(ctx context.Context, arg GetPreviousMessagesParams) ([]dto.Message, error) {
-	params := gen.GetPreviousMessagesParams{
-		RoomID:    arg.RoomID,
-		CreatedAt: pgtype.Timestamp{Time: arg.CreatedAt, Valid: true},
-		Limit:     int32(arg.Limit),
-	}
-
-	rows, err := s.Repo.Queries().GetPreviousMessages(ctx, params)
+func (s *MessageService) GetPreviousMessages(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int) ([]dto.Message, error) {
+	rows, err := s.r.GetPreviousMessages(ctx, gen.GetAllMessagesBeforeCreatedAtParams{
+		RoomID:    pgtype.UUID{Bytes: roomID, Valid: true},
+		CreatedAt: pgtype.Timestamp{Time: createdAt, Valid: true},
+		Limit:     int32(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +50,6 @@ func (s *MessageService) GetPreviousMessages(ctx context.Context, arg GetPreviou
 		dtos[i] = ToMessageDto(m)
 	}
 
-	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), arg.RoomID)
+	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), roomID)
 	return dtos, nil
 }

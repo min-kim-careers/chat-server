@@ -13,17 +13,9 @@ var authUrl = os.Getenv("AUTH_URL")
 var authKey = os.Getenv("AUTH_KEY")
 var authKeyHeader = os.Getenv("AUTH_KEY_HEADER")
 
-type AuthResponse[T any] struct {
-	Message string `json:"message"`
-	Data    T      `json:"data"`
-}
-
-type VerifyTokenRequest struct {
-	IDToken string `json:"idToken"`
-}
-
-type VerifyTokenResponse struct {
-	UserID string `json:"userId"`
+func attachServiceKey(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authKeyHeader, authKey)
 }
 
 func VerifyToken(idToken string) (*VerifyTokenResponse, bool) {
@@ -34,13 +26,17 @@ func VerifyToken(idToken string) (*VerifyTokenResponse, bool) {
 		return nil, false
 	}
 
-	req, err := http.NewRequest("POST", authUrl+"/auth/firebase/verify-token", bytes.NewBuffer(reqBody))
+	body := bytes.NewBuffer(reqBody)
+	req, err := http.NewRequest(
+		"POST",
+		authUrl+"/auth/firebase/verify-token",
+		body,
+	)
 	if err != nil {
 		return nil, false
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(authKeyHeader, authKey)
+	attachServiceKey(req)
 
 	resp, err := client.Do(req)
 	if err != nil {

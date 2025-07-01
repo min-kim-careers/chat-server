@@ -1,64 +1,77 @@
 package chat
 
 import (
-	"context"
 	"log"
 
 	"chat-server/internal/deps"
-	"chat-server/internal/dto"
 
-	"github.com/gorilla/websocket"
+	"github.com/google/uuid"
 )
-
-type Hub struct {
-	deps       *deps.Container
-	rooms      map[string]*Room
-	register   chan *Room
-	unregister chan *Room
-}
 
 func NewHub(deps *deps.Container) *Hub {
 	return &Hub{
-		deps:       deps,
-		rooms:      make(map[string]*Room),
-		register:   make(chan *Room),
-		unregister: make(chan *Room),
+		Deps:             deps,
+		Rooms:            make(map[uuid.UUID]*Room),
+		RoomRegister:     make(chan *Room),
+		RoomUnregister:   make(chan *Room),
+		Clients:          make(map[string]*Client),
+		ClientRegister:   make(chan *Client),
+		ClientUnregister: make(chan *Client),
 	}
 }
 
-func (h *Hub) HandleConnection(ctx context.Context, conn *websocket.Conn, message *dto.Message) {
-	roomID := message.RoomID
-	room, roomExists := h.rooms[roomID]
-	if !roomExists {
-		newRoom := NewRoom(roomID, h)
+func (h *Hub) HandleConnection(roomID uuid.UUID, newClient *Client) {
+	room, exists := h.Rooms[roomID]
+	if !exists {
+		newRoom := NewRoom(h, roomID)
 		log.Printf("Room <%s> created.", roomID)
-		h.register <- newRoom
+		h.RoomRegister <- newRoom
+		newRoom.Run()
 		room = newRoom
-		room.Run(ctx, h)
 	} else {
 		log.Printf("Room <%s> found in hub.", roomID)
 	}
 
-	room.AddClient(ctx, conn, message.ClientID)
+	h.ClientRegister <- newClient
+	room.AddClient(newClient)
 }
 
-func (h *Hub) HandleRegistrations() {
+func (h *Hub) HandleRoomRegistrations() {
 	for {
 		select {
 
-		case room := <-h.register:
-			h.rooms[room.id] = room
-			log.Printf("Room <%s> registered to hub.", room.id)
+		case room := <-h.RoomRegister:
+			h.Rooms[room.ID] = room
+			log.Printf("Room <%s> registered to hub.", room.ID)
 
-		case room := <-h.unregister:
-			if _, exists := h.rooms[room.id]; exists {
-				delete(h.rooms, room.id)
-				log.Printf("Room <%s> unregistered from hub.", room.id)
+		case room := <-h.RoomUnregister:
+			if _, exists := h.Rooms[room.ID]; exists {
+				delete(h.Rooms, room.ID)
+				log.Printf("Room <%s> unregistered from hub.", room.ID)
+			}
+		}
+	}
+}
+
+func (h *Hub) HandleClientRegistrations() {
+	for {
+		select {
+
+		case client := <-h.ClientRegister:
+			h.Clients[client.id] = client
+			log.Printf("Client <%s> registered to hub.", client.id)
+
+		case client := <-h.ClientUnregister:
+			if _, exists := h.Clients[client.id]; exists {
+				client.cancel()
+				delete(h.Clients, client.id)
+				log.Printf("Client <%s> unregistered from hub.", client.id)
 			}
 		}
 	}
 }
 
 func (h *Hub) Run() {
-	go h.HandleRegistrations()
+	go h.HandleRoomRegistrations()
+	go h.HandleClientRegistrations()
 }
