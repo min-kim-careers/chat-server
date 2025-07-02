@@ -4,11 +4,9 @@ import (
 	"chat-server/internal/dto"
 	"context"
 	"log"
-
-	"github.com/google/uuid"
 )
 
-func NewRoom(hub *Hub, id uuid.UUID) *Room {
+func NewRoom(hub *Hub, id string) *Room {
 	return &Room{
 		Hub:        hub,
 		ID:         id,
@@ -49,7 +47,7 @@ func (r *Room) HandleClients() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pubsub := r.Hub.Deps.Cache.PubSub(ctx, r.ID.String())
+	pubsub := r.Hub.Svc.Room.GetRoomChannel(ctx, r.ID)
 	if pubsub == nil {
 		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", r.ID)
 		r.Hub.RoomUnregister <- r
@@ -57,23 +55,23 @@ func (r *Room) HandleClients() {
 	}
 	defer pubsub.Close()
 
-	channel := pubsub.Channel()
+	for data := range pubsub.Channel() {
+		payload := []byte(data.Payload)
 
-	for data := range channel {
-		msgJson := []byte(data.Payload)
+		log.Println("payload:", data.Payload)
 
-		msg := dto.DeserializeMessage(msgJson)
-		if msg == nil {
-			log.Printf("Error deserializing message in room <%s>. Message: %s", r.ID, msgJson)
+		m, err := dto.ToMessageDTO(payload)
+		if err != nil {
+			log.Printf("Error parsing payload in room <%s>. Payload: %s", r.ID, payload)
 			continue
 		}
 
 		for clientID, client := range r.Clients {
-			if clientID == msg.ClientID {
+			if clientID == m.ClientID {
 				continue
 			}
 
-			client.Send(msgJson)
+			client.Send(payload)
 		}
 	}
 

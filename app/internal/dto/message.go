@@ -2,88 +2,75 @@ package dto
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 
 	"github.com/go-playground/validator/v10"
 )
 
-var validMessageTypes = map[string]bool{
-	"connect":    true,
-	"disconnect": true,
-	"chat":       true,
-	"restore":    true,
-	"empty":      true,
-}
-
-func validateMessage(msg *Message) bool {
+func validateMessage(m *Message) bool {
 	validate := validator.New()
 
-	err := validate.Struct(msg)
+	err := validate.Struct(m)
 	if err != nil {
 		log.Println("Invalid message:", err)
 		return false
 	}
 
-	_, valid := validMessageTypes[msg.Mode]
+	mode, valid := MessageModes[m.Mode]
 	if !valid {
-		log.Println("Invalid message type:", msg.Mode)
+		log.Println("Invalid message mode:", m.Mode)
 		return false
+	}
+
+	switch mode {
+	case "restore":
+		if m.CreatedAt.IsZero() {
+			log.Println(m.CreatedAt)
+			log.Println("Restore missing created at")
+			return false
+		}
+		return true
 	}
 
 	return true
 }
 
-func DeserializeMessage(jsonData []byte) *Message {
+func ToMessageDTO(data []byte) (*Message, error) {
 	var msg Message
 
-	err := json.Unmarshal(jsonData, &msg)
+	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("Error deserializing message:", string(jsonData))
-		log.Println(err)
-		return nil
+		return nil, err
 	}
 
 	if !validateMessage(&msg) {
-		log.Println("Error validating message:", string(jsonData))
-		return nil
+		return nil, errors.New("invalid message format")
 	}
 
-	return &msg
+	return &msg, nil
 }
 
-func SerializeMessage(m *Message) []byte {
-	data, err := json.Marshal(m)
+func ToMessagePayload(p []byte) ([]byte, error) {
+	var m MessagePayload
+
+	err := json.Unmarshal(p, &m)
 	if err != nil {
-		log.Println("Error serializing message:", err)
-		return nil
+		return nil, err
 	}
 
-	return data
+	_p, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return _p, nil
 }
 
-func EncodeRaw(arr []Message) (json.RawMessage, error) {
+func ToRawMessages[T any](arr []T) (json.RawMessage, error) {
 	b, err := json.Marshal(arr)
 	if err != nil {
 		return nil, err
 	}
 	return json.RawMessage(b), nil
 }
-
-// func PrintMessage(m *MessageDTO) {
-// 	res, err := json.MarshalIndent(m, "", "  ")
-// 	if err != nil {
-// 		log.Println("Error printing message:", err)
-// 		return
-// 	}
-// 	log.Println(res)
-// }
-
-// func PrintJson(j []byte) {
-// 	var buffer bytes.Buffer
-// 	err := json.Indent(&buffer, j, "", "\t")
-// 	if err != nil {
-// 		log.Println("Error prettifying JSON:", j)
-// 		return
-// 	}
-// 	log.Println(buffer.String())
-// }

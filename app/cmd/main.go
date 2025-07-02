@@ -3,8 +3,8 @@ package main
 import (
 	"chat-server/internal/api"
 	"chat-server/internal/chat"
-	"chat-server/internal/deps"
 	"chat-server/internal/handler"
+	"chat-server/internal/service"
 	"flag"
 	"log"
 	"net/http"
@@ -13,11 +13,10 @@ import (
 )
 
 func main() {
-	// Dependencies
-	deps := deps.NewContainer()
+	services := service.NewServices()
 
 	// Hub
-	hub := chat.NewHub(deps)
+	hub := chat.NewHub(services)
 	log.Println("Hub created.")
 
 	hub.Run()
@@ -30,8 +29,8 @@ func main() {
 	// API server
 	go func() {
 		router := gin.Default()
-		api.RegisterMessageRoutes(router.Group(""), deps)
-		api.RegisterRoomRoutes(router.Group(""), deps)
+		api.RegisterMessageRoutes(router.Group(""), services)
+		api.RegisterRoomRoutes(router.Group(""), services)
 		log.Println("Chat API server running on", *apiAddr)
 		if err := router.Run(*apiAddr); err != nil {
 			panic(err)

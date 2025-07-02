@@ -3,15 +3,13 @@ package chat
 import (
 	"log"
 
-	"chat-server/internal/deps"
-
-	"github.com/google/uuid"
+	"chat-server/internal/service"
 )
 
-func NewHub(deps *deps.Container) *Hub {
+func NewHub(svc *service.Services) *Hub {
 	return &Hub{
-		Deps:             deps,
-		Rooms:            make(map[uuid.UUID]*Room),
+		Svc:              svc,
+		Rooms:            make(map[string]*Room),
 		RoomRegister:     make(chan *Room),
 		RoomUnregister:   make(chan *Room),
 		Clients:          make(map[string]*Client),
@@ -20,7 +18,7 @@ func NewHub(deps *deps.Container) *Hub {
 	}
 }
 
-func (h *Hub) HandleConnection(roomID uuid.UUID, newClient *Client) {
+func (h *Hub) addRoom(roomID string) *Room {
 	room, exists := h.Rooms[roomID]
 	if !exists {
 		newRoom := NewRoom(h, roomID)
@@ -31,6 +29,11 @@ func (h *Hub) HandleConnection(roomID uuid.UUID, newClient *Client) {
 	} else {
 		log.Printf("Room <%s> found in hub.", roomID)
 	}
+	return room
+}
+
+func (h *Hub) HandleConnection(roomID string, newClient *Client) {
+	room := h.addRoom(roomID)
 
 	h.ClientRegister <- newClient
 	room.AddClient(newClient)

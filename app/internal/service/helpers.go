@@ -1,7 +1,7 @@
 package service
 
 import (
-	"chat-server/db/gen"
+	"chat-server/internal/db/gen"
 	"chat-server/internal/dto"
 
 	"github.com/google/uuid"
@@ -22,5 +22,13 @@ func toRoomDTO(r gen.Room) *dto.Room {
 		Client2:   r.Client2.Bytes,
 		CreatedAt: r.CreatedAt.Time,
 		UpdatedAt: r.UpdatedAt.Time,
+	}
+}
+
+func ToMessagePayload(m gen.Message) *dto.MessagePayload {
+	return &dto.MessagePayload{
+		Mode:      m.Mode,
+		CreatedAt: m.CreatedAt.Time,
+		Data:      m.Data,
 	}
 }

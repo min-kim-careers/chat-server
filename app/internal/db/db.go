@@ -17,9 +17,14 @@ type DB struct {
 }
 
 func NewDB(ctx context.Context) *DB {
-	return &DB{
+	db := &DB{
 		DBPool: initDBPool(ctx),
 	}
+
+	// db.RunRoomSchemaSQL(ctx)
+	// db.RunMessageSchemaSQL(ctx)
+
+	return db
 }
 
 func initDBPool(ctx context.Context) *pgxpool.Pool {
