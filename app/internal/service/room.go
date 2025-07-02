@@ -1,8 +1,9 @@
 package service
 
 import (
-	"chat-server/db"
-	"chat-server/db/gen"
+	"chat-server/internal/cache"
+	"chat-server/internal/db"
+	"chat-server/internal/db/gen"
 	"chat-server/internal/dto"
 	"chat-server/internal/repo"
 	"context"
@@ -13,21 +14,28 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/redis/go-redis/v9"
 )
 
 type RoomService struct {
 	r  *repo.RoomRepo
 	db *db.DB
+	c  *cache.Cache
 }
 
-func NewRoomService(r *repo.RoomRepo, db *db.DB) *RoomService {
+func NewRoomService(r *repo.RoomRepo, db *db.DB, c *cache.Cache) *RoomService {
 	return &RoomService{
 		r:  r,
 		db: db,
+		c:  c,
 	}
 }
 
 func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*dto.Room, error) {
+	if itemID == "" || client1 == uuid.Nil || client2 == uuid.Nil {
+		return nil, errors.New("invalid params")
+	}
+
 	tx, err := s.db.DBPool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -78,4 +86,12 @@ func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*dto.R
 	}
 	dto := toRoomDTO(row)
 	return dto, nil
+}
+
+func roomKey(roomID string) string {
+	return "chat:room:" + roomID
+}
+
+func (s *RoomService) GetRoomChannel(ctx context.Context, roomID string) *redis.PubSub {
+	return s.c.PubSub(ctx, roomKey(roomID))
 }

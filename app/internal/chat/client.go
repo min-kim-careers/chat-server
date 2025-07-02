@@ -1,12 +1,11 @@
 package chat
 
 import (
-	"chat-server/internal/cache"
 	"chat-server/internal/constant"
-	"chat-server/internal/deps"
 	"chat-server/internal/dto"
 	"chat-server/internal/service"
 	"context"
+	"encoding/json"
 	"log"
 
 	"time"
@@ -15,42 +14,39 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func NewClient(ctx context.Context, conn *websocket.Conn, id string, deps *deps.Container) *Client {
-	ctx, cancel := context.WithCancel(ctx)
+func NewClient(conn *websocket.Conn, id string, svc *service.Services) *Client {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
 		id:     id,
-		deps:   deps,
+		svc:    svc,
 		ctx:    ctx,
 		cancel: cancel,
 		conn:   conn,
 	}
 }
 
-func (c *Client) services() *service.Services {
-	return c.deps.Services
-}
-
-func (c *Client) cache() *cache.Cache {
-	return c.deps.Cache
-}
-
-func (c *Client) handleChatMessage(roomID uuid.UUID, msgJson []byte) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	if !c.cache().Publish(c.ctx, roomID.String(), msgJson) {
+func (c *Client) handleChatMessage(roomID string, m *dto.Message) {
+	m.ClientID = c.id
+	m.CreatedAt = time.Now()
+	p, err := json.Marshal(m)
+	if err != nil {
+		log.Printf("Failed to marshal chat message from <%s>: %v", c.id, err)
 		return
 	}
 
-	if !c.cache().Add(c.ctx, roomID.String(), msgJson) {
+	if !c.svc.Message.PublishMessage(c.ctx, roomID, p) {
 		return
 	}
 
-	if !c.cache().IsFull(c.ctx, roomID.String(), constant.CACHE_LIMIT) {
+	if !c.svc.Message.CacheMessage(c.ctx, roomID, p) {
 		return
 	}
 
-	cachedMsgs := c.cache().Restore(c.ctx, roomID.String(), constant.RESTORE_LIMIT)
+	if !c.svc.Message.MessageCacheIsFull(c.ctx, roomID) {
+		return
+	}
+
+	cachedMsgs := c.svc.Message.GetCachedMessages(c.ctx, roomID)
 	if len(cachedMsgs) == 0 {
 		return
 	}
@@ -59,83 +55,91 @@ func (c *Client) handleChatMessage(roomID uuid.UUID, msgJson []byte) {
 	// 	return
 	// }
 
-	c.cache().Clear(c.ctx, roomID.String())
+	c.svc.Message.ClearMessageCache(c.ctx, roomID)
 }
 
-func (c *Client) handleRestoreMessage(roomID uuid.UUID, createdAt time.Time) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) handleRestoreMessage(roomID string, createdAt time.Time) {
+	restoredMsgs := []*dto.MessagePayload{}
 
-	dbMsgs, err := c.services().Message.GetPreviousMessages(
-		c.ctx,
-		roomID,
-		createdAt,
-		constant.RESTORE_LIMIT,
-	)
-	if err != nil {
-		log.Printf("Error fetching old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
-		return
+	cachedMsgs := c.svc.Message.GetCachedMessages(c.ctx, roomID)
+	restoredMsgs = append(restoredMsgs, cachedMsgs...)
+
+	if len(cachedMsgs) != constant.RESTORE_LIMIT {
+		_roomID, err := uuid.Parse(roomID)
+		if err != nil {
+			log.Println("Error parsing room ID:", err)
+			return
+		}
+		dbMsgs, err := c.svc.Message.GetDBMessages(
+			c.ctx,
+			_roomID,
+			createdAt,
+			constant.RESTORE_LIMIT-len(cachedMsgs),
+		)
+		if err != nil {
+			log.Printf("Error fetching old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
+			return
+		}
+		restoredMsgs = append(restoredMsgs, dbMsgs...)
 	}
 
-	data, err := dto.EncodeRaw(dbMsgs)
+	data, err := dto.ToRawMessages(restoredMsgs)
 	if err != nil {
 		log.Printf("Error encoding old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
 	}
 
-	newMsg := &dto.Message{
-		Mode:     "restore",
-		RoomID:   roomID,
-		ClientID: c.id,
-		Data:     data,
+	m := &dto.Message{
+		Mode: "restore",
+		Data: data,
 	}
 
-	msgJson := dto.SerializeMessage(newMsg)
-	if msgJson == nil {
-		log.Printf("Error restoring old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
+	p, err := json.Marshal(m)
+	if err != nil {
+		log.Printf("Error marshalling old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
 	}
 
-	c.Send(msgJson)
+	go c.Send(p)
 }
 
 // Send to client/browser
-func (c *Client) Send(msgJson []byte) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) Send(p []byte) {
+	_p, err := dto.ToMessagePayload(p)
+	if err != nil {
+		log.Printf("Error parsing message payload: %v", err)
+	}
 
-	err := c.conn.WriteMessage(websocket.TextMessage, msgJson)
+	err = c.conn.WriteMessage(websocket.TextMessage, _p)
 	if err != nil {
 		log.Printf("Error sending message to client <%s>: %v", c.id, err)
 	} else {
-		log.Printf("Sent message to client <%s>: %v", c.id, string(msgJson))
+		log.Printf("Sent message to client <%s>: %v", c.id, string(p))
 	}
 }
 
 // Read from client/browser
-func (c *Client) Read(room *Room) {
-	roomID := room.ID
-
+func (c *Client) Read(r *Room) {
 	for {
-		_, msgJson, err := c.conn.ReadMessage()
+		_, p, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading message from client <%s>: %v", c.id, err)
-			room.Unregister <- c
+			log.Printf("Error reading payload from client <%s>: %v", c.id, err)
+			r.Unregister <- c
 			return
 		}
 
-		msg := dto.DeserializeMessage(msgJson)
-		if msg == nil {
+		m, err := dto.ToMessageDTO(p)
+		if err != nil {
+			log.Println("Error parsing payload:", err)
 			continue
 		}
 
-		switch msg.Mode {
+		switch m.Mode {
 		case "chat":
-			c.handleChatMessage(roomID, msgJson)
+			c.handleChatMessage(r.ID, m)
 		case "restore":
-			c.handleRestoreMessage(roomID, msg.CreatedAt)
+			c.handleRestoreMessage(r.ID, m.CreatedAt)
 		}
-
 	}
 }
 

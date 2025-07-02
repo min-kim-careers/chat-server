@@ -1,7 +1,7 @@
 package repo
 
 import (
-	"chat-server/db/gen"
+	"chat-server/internal/db/gen"
 )
 
 type Repos struct {

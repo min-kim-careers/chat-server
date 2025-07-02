@@ -1,26 +1,23 @@
 package chat
 
 import (
-	"chat-server/internal/deps"
+	"chat-server/internal/service"
 	"context"
-	"sync"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 type Client struct {
 	id     string
-	deps   *deps.Container
+	svc    *service.Services
 	ctx    context.Context
 	cancel context.CancelFunc
 	conn   *websocket.Conn
-	lock   sync.Mutex
 }
 
 type Hub struct {
-	Deps             *deps.Container
-	Rooms            map[uuid.UUID]*Room
+	Svc              *service.Services
+	Rooms            map[string]*Room
 	RoomRegister     chan *Room
 	RoomUnregister   chan *Room
 	Clients          map[string]*Client
@@ -30,7 +27,7 @@ type Hub struct {
 
 type Room struct {
 	Hub        *Hub
-	ID         uuid.UUID
+	ID         string
 	Clients    map[string]*Client
 	Register   chan *Client
 	Unregister chan *Client
