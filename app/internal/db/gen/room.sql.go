@@ -99,6 +99,35 @@ func (q *Queries) GetRoomById(ctx context.Context, id pgtype.UUID) (Room, error)
 	return i, err
 }
 
+const getRoomByIdAndClient = `-- name: GetRoomByIdAndClient :one
+SELECT
+  id, item_id, client1, client2, created_at, updated_at
+FROM
+  rooms
+WHERE
+  id = $1
+  AND $2 IN (client1, client2)
+`
+
+type GetRoomByIdAndClientParams struct {
+	ID       pgtype.UUID `json:"id"`
+	ClientID pgtype.UUID `json:"client_id"`
+}
+
+func (q *Queries) GetRoomByIdAndClient(ctx context.Context, arg GetRoomByIdAndClientParams) (Room, error) {
+	row := q.db.QueryRow(ctx, getRoomByIdAndClient, arg.ID, arg.ClientID)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.ItemID,
+		&i.Client1,
+		&i.Client2,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getRoomByItemAndClients = `-- name: GetRoomByItemAndClients :one
 SELECT
   id, item_id, client1, client2, created_at, updated_at

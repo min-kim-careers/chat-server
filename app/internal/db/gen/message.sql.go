@@ -17,7 +17,7 @@ INSERT INTO
 VALUES
   ($1, $2, $3, $4, $5)
 RETURNING
-  id, mode, room_id, client_id, created_at, data
+  id, mode, room_id, client_id, created_at, data, read
 `
 
 type CreateMessageParams struct {
@@ -44,13 +44,14 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.ClientID,
 		&i.CreatedAt,
 		&i.Data,
+		&i.Read,
 	)
 	return i, err
 }
 
 const getAllMessagesBeforeCreatedAt = `-- name: GetAllMessagesBeforeCreatedAt :many
 SELECT
-  id, mode, room_id, client_id, created_at, data
+  id, mode, room_id, client_id, created_at, data, read
 FROM
   messages
 WHERE
@@ -84,6 +85,7 @@ func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllM
 			&i.ClientID,
 			&i.CreatedAt,
 			&i.Data,
+			&i.Read,
 		); err != nil {
 			return nil, err
 		}
@@ -97,7 +99,7 @@ func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllM
 
 const getAllMessagesByRoomID = `-- name: GetAllMessagesByRoomID :many
 SELECT
-  id, mode, room_id, client_id, created_at, data
+  id, mode, room_id, client_id, created_at, data, read
 FROM
   messages
 WHERE
@@ -122,6 +124,7 @@ func (q *Queries) GetAllMessagesByRoomID(ctx context.Context, roomID pgtype.UUID
 			&i.ClientID,
 			&i.CreatedAt,
 			&i.Data,
+			&i.Read,
 		); err != nil {
 			return nil, err
 		}

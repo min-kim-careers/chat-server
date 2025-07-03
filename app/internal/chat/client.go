@@ -3,6 +3,7 @@ package chat
 import (
 	"chat-server/internal/constant"
 	"chat-server/internal/dto"
+	"chat-server/internal/helper"
 	"chat-server/internal/service"
 	"context"
 	"encoding/json"
@@ -27,7 +28,9 @@ func NewClient(conn *websocket.Conn, id string, svc *service.Services) *Client {
 
 func (c *Client) handleChatMessage(roomID string, m *dto.Message) {
 	m.ClientID = c.id
-	m.CreatedAt = time.Now()
+	if m.CreatedAt.IsZero() {
+		m.CreatedAt = time.Now()
+	}
 	p, err := json.Marshal(m)
 	if err != nil {
 		log.Printf("Failed to marshal chat message from <%s>: %v", c.id, err)
@@ -46,7 +49,11 @@ func (c *Client) handleChatMessage(roomID string, m *dto.Message) {
 		return
 	}
 
-	cachedMsgs := c.svc.Message.GetCachedMessages(c.ctx, roomID)
+	cachedMsgs, err := c.svc.Message.GetMessagesFromCache(c.ctx, roomID, c.id)
+	if err != nil {
+		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
+		return
+	}
 	if len(cachedMsgs) == 0 {
 		return
 	}
@@ -59,9 +66,13 @@ func (c *Client) handleChatMessage(roomID string, m *dto.Message) {
 }
 
 func (c *Client) handleRestoreMessage(roomID string, createdAt time.Time) {
-	restoredMsgs := []*dto.MessagePayload{}
+	restoredMsgs := []*dto.MessageOut{}
 
-	cachedMsgs := c.svc.Message.GetCachedMessages(c.ctx, roomID)
+	cachedMsgs, err := c.svc.Message.GetMessagesFromCache(c.ctx, roomID, c.id)
+	if err != nil {
+		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
+		return
+	}
 	restoredMsgs = append(restoredMsgs, cachedMsgs...)
 
 	if len(cachedMsgs) != constant.RESTORE_LIMIT {
@@ -70,56 +81,64 @@ func (c *Client) handleRestoreMessage(roomID string, createdAt time.Time) {
 			log.Println("Error parsing room ID:", err)
 			return
 		}
-		dbMsgs, err := c.svc.Message.GetDBMessages(
+		dbMsgs, err := c.svc.Message.GetMessagesFromDB(
 			c.ctx,
 			_roomID,
 			createdAt,
 			constant.RESTORE_LIMIT-len(cachedMsgs),
+			c.id,
 		)
 		if err != nil {
-			log.Printf("Error fetching old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
+			log.Printf("Error fetching messages from db for client <%s> in room <%s>: %v", c.id, roomID, err)
 			return
 		}
 		restoredMsgs = append(restoredMsgs, dbMsgs...)
 	}
 
-	data, err := dto.ToRawMessages(restoredMsgs)
+	data, err := helper.ToRawMessages(restoredMsgs)
 	if err != nil {
-		log.Printf("Error encoding old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
+		log.Printf("Error encoding restored messages for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
 	}
 
-	m := &dto.Message{
+	p, err := json.Marshal(&dto.MessageOut{
 		Mode: "restore",
 		Data: data,
-	}
-
-	p, err := json.Marshal(m)
+	})
 	if err != nil {
-		log.Printf("Error marshalling old messages for client <%s> in room <%s>: %v", c.id, roomID, err)
+		log.Printf("Error marshalling restored messages for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
 	}
 
-	go c.Send(p)
+	err = c.conn.WriteMessage(websocket.TextMessage, p)
+	if err != nil {
+		log.Printf("Error sending restored messages to client <%s>: %v", c.id, err)
+	}
+	log.Printf("Sent restored messages to client <%s>: %v", c.id, string(p))
 }
 
 // Send to client/browser
 func (c *Client) Send(p []byte) {
-	_p, err := dto.ToMessagePayload(p)
+	m, err := dto.ToMessageOut(p, c.id)
 	if err != nil {
-		log.Printf("Error parsing message payload: %v", err)
+		return
+	}
+
+	_p, err := json.Marshal(m)
+	if err != nil {
+		return
 	}
 
 	err = c.conn.WriteMessage(websocket.TextMessage, _p)
 	if err != nil {
 		log.Printf("Error sending message to client <%s>: %v", c.id, err)
-	} else {
-		log.Printf("Sent message to client <%s>: %v", c.id, string(p))
 	}
+	log.Printf("Sent message to client <%s>: %v", c.id, string(p))
 }
 
 // Read from client/browser
 func (c *Client) Read(r *Room) {
+
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
@@ -128,7 +147,7 @@ func (c *Client) Read(r *Room) {
 			return
 		}
 
-		m, err := dto.ToMessageDTO(p)
+		m, err := dto.ToMessage(p)
 		if err != nil {
 			log.Println("Error parsing payload:", err)
 			continue

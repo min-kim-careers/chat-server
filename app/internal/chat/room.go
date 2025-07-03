@@ -17,6 +17,11 @@ func NewRoom(hub *Hub, id string) *Room {
 }
 
 func (r *Room) AddClient(client *Client) {
+	_, exists := r.Clients[client.id]
+	if exists {
+		log.Printf("Client <%s> already exists in room <%s>", client.id, r.ID)
+		return
+	}
 	r.Register <- client
 	client.Run(r)
 }
@@ -56,13 +61,11 @@ func (r *Room) HandleClients() {
 	defer pubsub.Close()
 
 	for data := range pubsub.Channel() {
-		payload := []byte(data.Payload)
+		p := []byte(data.Payload)
 
-		log.Println("payload:", data.Payload)
-
-		m, err := dto.ToMessageDTO(payload)
+		m, err := dto.ToMessage(p)
 		if err != nil {
-			log.Printf("Error parsing payload in room <%s>. Payload: %s", r.ID, payload)
+			log.Printf("Error parsing payload in room <%s>. Payload: %s", r.ID, p)
 			continue
 		}
 
@@ -71,7 +74,7 @@ func (r *Room) HandleClients() {
 				continue
 			}
 
-			client.Send(payload)
+			client.Send(p)
 		}
 	}
 

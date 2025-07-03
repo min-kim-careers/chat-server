@@ -4,9 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 )
+
+type Message struct {
+	Mode      string          `json:"mode"`
+	RoomID    uuid.UUID       `json:"roomId"`
+	ClientID  string          `json:"clientId"`
+	CreatedAt time.Time       `json:"createdAt"`
+	Data      json.RawMessage `json:"data"`
+	Read      bool            `json:"read"`
+}
 
 func validateMessage(m *Message) bool {
 	validate := validator.New()
@@ -36,41 +47,14 @@ func validateMessage(m *Message) bool {
 	return true
 }
 
-func ToMessageDTO(data []byte) (*Message, error) {
-	var msg Message
-
-	err := json.Unmarshal(data, &msg)
-	if err != nil {
-		return nil, err
-	}
-
-	if !validateMessage(&msg) {
-		return nil, errors.New("invalid message format")
-	}
-
-	return &msg, nil
-}
-
-func ToMessagePayload(p []byte) ([]byte, error) {
-	var m MessagePayload
-
+func ToMessage(p []byte) (*Message, error) {
+	var m Message
 	err := json.Unmarshal(p, &m)
 	if err != nil {
 		return nil, err
 	}
-
-	_p, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
+	if !validateMessage(&m) {
+		return nil, errors.New("invalid message format")
 	}
-
-	return _p, nil
-}
-
-func ToRawMessages[T any](arr []T) (json.RawMessage, error) {
-	b, err := json.Marshal(arr)
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(b), nil
+	return &m, nil
 }

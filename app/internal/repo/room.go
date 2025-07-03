@@ -24,12 +24,12 @@ func (r *RoomRepo) CreateRoom(ctx context.Context, arg gen.CreateRoomParams) (ge
 	return r.q.CreateRoom(ctx, arg)
 }
 
-func (r *RoomRepo) GetRoomById(ctx context.Context, id pgtype.UUID) (gen.Room, error) {
-	if !id.Valid {
-		return gen.Room{}, errors.New("invalid id")
+func (r *RoomRepo) GetRoomByIdAndClient(ctx context.Context, arg gen.GetRoomByIdAndClientParams) (gen.Room, error) {
+	if !arg.ID.Valid || !arg.ClientID.Valid {
+		return gen.Room{}, errors.New("invalid arg")
 	}
 
-	return r.q.GetRoomById(ctx, id)
+	return r.q.GetRoomByIdAndClient(ctx, arg)
 }
 
 func (r *RoomRepo) GetRoomByItemAndClients(ctx context.Context, arg gen.GetRoomByItemAndClientsParams) (gen.Room, error) {
@@ -38,4 +38,12 @@ func (r *RoomRepo) GetRoomByItemAndClients(ctx context.Context, arg gen.GetRoomB
 	}
 
 	return r.q.GetRoomByItemAndClients(ctx, arg)
+}
+
+func (r *RoomRepo) GetAllRoomsByClient(ctx context.Context, clientID pgtype.UUID) ([]gen.Room, error) {
+	if !clientID.Valid {
+		return []gen.Room{}, errors.New("invalid arg")
+	}
+
+	return r.q.GetAllRoomsByClient(ctx, clientID)
 }

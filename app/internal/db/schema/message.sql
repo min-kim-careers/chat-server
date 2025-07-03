@@ -4,5 +4,6 @@ CREATE TABLE messages (
   room_id UUID NOT NULL REFERENCES rooms(id),
   client_id VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  data JSONB DEFAULT '{}'
+  data JSONB DEFAULT '{}',
+  read BOOLEAN NOT NULL DEFAULT FALSE
 );
