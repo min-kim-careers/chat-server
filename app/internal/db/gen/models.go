@@ -15,6 +15,7 @@ type Message struct {
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	Data      []byte           `json:"data"`
+	Read      bool             `json:"read"`
 }
 
 type Room struct {

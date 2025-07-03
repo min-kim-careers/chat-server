@@ -12,7 +12,7 @@ import (
 )
 
 func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
-	clientId := mockVerifyClient()
+	clientId := verifyClient(r)
 	if clientId == nil {
 		log.Printf("Authentication failed")
 		return
@@ -37,14 +37,15 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 		return
 	}
 
-	m, err := dto.ToMessageDTO(p)
+	m, err := dto.ToMessage(p)
 	if err != nil {
 		log.Println("Error parsing connection payload")
 		conn.Close()
 		return
 	}
 
-	if !isAuthorised(r.Context(), hub.Svc.Room, *clientId, m.RoomID) {
+	if err := isAuthorised(r.Context(), hub.Svc.Room, *clientId, m.RoomID); err != nil {
+		log.Printf("Unauthorised client: %v", err)
 		conn.Close()
 		return
 	}

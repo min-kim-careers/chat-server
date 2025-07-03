@@ -3,6 +3,7 @@ package service
 import (
 	"chat-server/internal/db/gen"
 	"chat-server/internal/dto"
+	"chat-server/internal/helper"
 
 	"github.com/google/uuid"
 )
@@ -14,21 +15,21 @@ func sortClientIds(client1 uuid.UUID, client2 uuid.UUID) (uuid.UUID, uuid.UUID) 
 	return client1, client2
 }
 
-func toRoomDTO(r gen.Room) *dto.Room {
-	return &dto.Room{
-		ID:        r.ID.Bytes,
+func dbRoomToDTO(r gen.Room) *dto.RoomOut {
+	return &dto.RoomOut{
+		ID:        helper.ToDTOUUID(r.ID),
 		ItemID:    r.ItemID,
-		Client1:   r.Client1.Bytes,
-		Client2:   r.Client2.Bytes,
 		CreatedAt: r.CreatedAt.Time,
 		UpdatedAt: r.UpdatedAt.Time,
 	}
 }
 
-func ToMessagePayload(m gen.Message) *dto.MessagePayload {
-	return &dto.MessagePayload{
+func dbMessageToDTO(m gen.Message, clientID string) *dto.MessageOut {
+	return &dto.MessageOut{
 		Mode:      m.Mode,
 		CreatedAt: m.CreatedAt.Time,
 		Data:      m.Data,
+		Read:      m.Read,
+		IsMine:    m.ClientID == clientID,
 	}
 }

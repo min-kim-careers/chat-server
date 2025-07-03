@@ -22,7 +22,7 @@ func (c *Cache) Publish(ctx context.Context, key string, p []byte) bool {
 		return false
 	}
 
-	log.Printf("Published following data to key <%s>: %v", key, err)
+	log.Printf("Published following data to key <%s>: %s", key, string(p))
 	return true
 }
 
@@ -43,7 +43,7 @@ func (c *Cache) Add(ctx context.Context, key string, p []byte) bool {
 		return false
 	}
 
-	log.Printf("Cached to key <%s>.", key)
+	log.Printf("Cached to key <%s>: %s", key, string(p))
 	return true
 }
 
@@ -63,5 +63,5 @@ func (c *Cache) Clear(ctx context.Context, key string) {
 		log.Printf("Error: DEL for key <%s>: %v", key, err)
 	}
 
-	log.Printf("Cleared values for key <%s>: %v", key, err)
+	log.Printf("Cleared values for key <%s>", key)
 }

@@ -5,6 +5,7 @@ import (
 	"chat-server/internal/db"
 	"chat-server/internal/db/gen"
 	"chat-server/internal/dto"
+	"chat-server/internal/helper"
 	"chat-server/internal/repo"
 	"context"
 	"database/sql"
@@ -13,8 +14,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/redis/go-redis/v9"
 )
 
 type RoomService struct {
@@ -31,7 +30,7 @@ func NewRoomService(r *repo.RoomRepo, db *db.DB, c *cache.Cache) *RoomService {
 	}
 }
 
-func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*dto.Room, error) {
+func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*dto.RoomOut, error) {
 	if itemID == "" || client1 == uuid.Nil || client2 == uuid.Nil {
 		return nil, errors.New("invalid params")
 	}
@@ -46,14 +45,15 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 
 	row, err := s.r.GetRoomByItemAndClients(ctx, gen.GetRoomByItemAndClientsParams{
 		ItemID:  itemID,
-		Client1: pgtype.UUID{Bytes: client1, Valid: true},
-		Client2: pgtype.UUID{Bytes: client2, Valid: true},
+		Client1: helper.ToDBUUID(client1),
+		Client2: helper.ToDBUUID(client2),
 	})
 	if err == nil {
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		dto := toRoomDTO(row)
+		dto := dbRoomToDTO(row)
+		log.Printf("Existing room found: <%s>", dto.ID)
 		return dto, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -62,8 +62,8 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 
 	row, err = s.r.CreateRoom(ctx, gen.CreateRoomParams{
 		ItemID:  itemID,
-		Client1: pgtype.UUID{Bytes: client1, Valid: true},
-		Client2: pgtype.UUID{Bytes: client2, Valid: true},
+		Client1: helper.ToDBUUID(client1),
+		Client2: helper.ToDBUUID(client2),
 	})
 	if err != nil {
 		return nil, err
@@ -73,25 +73,32 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		return nil, err
 	}
 
-	dto := toRoomDTO(row)
+	dto := dbRoomToDTO(row)
 
 	log.Printf("Registered room ID: <%s>", dto.ID)
 	return dto, nil
 }
 
-func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*dto.Room, error) {
-	row, err := s.r.GetRoomById(ctx, pgtype.UUID{Bytes: roomID, Valid: true})
+func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID, clientID uuid.UUID) (*dto.RoomOut, error) {
+	row, err := s.r.GetRoomByIdAndClient(ctx, gen.GetRoomByIdAndClientParams{
+		ID:       helper.ToDBUUID(roomID),
+		ClientID: helper.ToDBUUID(clientID),
+	})
 	if err != nil {
 		return nil, err
 	}
-	dto := toRoomDTO(row)
+	dto := dbRoomToDTO(row)
 	return dto, nil
 }
 
-func roomKey(roomID string) string {
-	return "chat:room:" + roomID
-}
-
-func (s *RoomService) GetRoomChannel(ctx context.Context, roomID string) *redis.PubSub {
-	return s.c.PubSub(ctx, roomKey(roomID))
+func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID) ([]*dto.RoomOut, error) {
+	rows, err := s.r.GetAllRoomsByClient(ctx, helper.ToDBUUID(roomID))
+	if err != nil {
+		return nil, err
+	}
+	dtos := make([]*dto.RoomOut, len(rows))
+	for i, r := range rows {
+		dtos[i] = dbRoomToDTO(r)
+	}
+	return dtos, nil
 }

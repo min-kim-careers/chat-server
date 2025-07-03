@@ -7,24 +7,22 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 )
 
-type Message struct {
+type MessageOut struct {
 	Mode      string          `json:"mode"`
-	RoomID    uuid.UUID       `json:"roomId"`
-	ClientID  string          `json:"clientId"`
 	CreatedAt time.Time       `json:"createdAt"`
 	Data      json.RawMessage `json:"data"`
 	Read      bool            `json:"read"`
+	IsMine    bool            `json:"isMine"`
 }
 
-func validateMessage(m *Message) bool {
+func validateMessageOut(m *MessageOut) bool {
 	validate := validator.New()
 
 	err := validate.Struct(m)
 	if err != nil {
-		log.Println("Invalid message:", err)
+		log.Println("Invalid message out:", err)
 		return false
 	}
 
@@ -36,25 +34,30 @@ func validateMessage(m *Message) bool {
 
 	switch mode {
 	case "restore":
-		if m.CreatedAt.IsZero() {
-			log.Println(m.CreatedAt)
-			log.Println("Restore missing created at")
-			return false
-		}
-		return true
+
 	}
 
 	return true
 }
 
-func ToMessage(p []byte) (*Message, error) {
+func ToMessageOut(p []byte, clientID string) (*MessageOut, error) {
 	var m Message
 	err := json.Unmarshal(p, &m)
 	if err != nil {
+		log.Printf("Error unmarshalling cached message: %v", err)
 		return nil, err
 	}
-	if !validateMessage(&m) {
-		return nil, errors.New("invalid message format")
+
+	_m := MessageOut{
+		Mode:      m.Mode,
+		CreatedAt: m.CreatedAt,
+		Data:      m.Data,
+		Read:      m.Read,
+		IsMine:    m.ClientID == clientID,
 	}
-	return &m, nil
+
+	if !validateMessageOut(&_m) {
+		return nil, errors.New("invalid message out format")
+	}
+	return &_m, nil
 }

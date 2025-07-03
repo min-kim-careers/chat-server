@@ -31,3 +31,12 @@ WHERE
   item_id = $1
   AND client1 = $2
   AND client2 = $3;
+
+-- name: GetRoomByIdAndClient :one
+SELECT
+  *
+FROM
+  rooms
+WHERE
+  id = $1
+  AND @client_id IN (client1, client2);
