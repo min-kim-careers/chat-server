@@ -1,9 +1,17 @@
 package dto
 
 var MessageModes = map[string]string{
-	"connect":    "connect",
+	// Flags
+	"connected": "connected",
+	"restored":  "restored",
+	"joined":    "joined",
+	"left":      "left",
+	"empty":     "empty",
+
+	// Actions
+	"chat":       "chat",
+	"restore":    "restore", // Requires createdAt
+	"join":       "join",    // Requires roomID
+	"leave":      "leave",
 	"disconnect": "disconnect",
-	"chat":       "true",
-	"restore":    "restore",
-	"empty":      "empty",
 }

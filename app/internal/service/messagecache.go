@@ -31,7 +31,7 @@ func (s *MessageService) GetMessagesFromCache(ctx context.Context, key string, c
 		if err != nil {
 			return nil, err
 		}
-		dtos[i] = _m
+		dtos[len(rows)-1-i] = _m
 	}
 
 	log.Printf("Fetched %d from cache from key <%s>.", len(dtos), key)

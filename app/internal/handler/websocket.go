@@ -1,9 +1,8 @@
 package handler
 
 import (
+	"chat-server/internal/auth"
 	"chat-server/internal/chat"
-
-	"chat-server/internal/dto"
 
 	"log"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 )
 
 func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
-	clientId := verifyClient(r)
+	clientId := auth.VerifyClient(r)
 	if clientId == nil {
 		log.Printf("Authentication failed")
 		return
@@ -30,26 +29,26 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 	}
 	log.Printf("Successfully upgraded connection for <%s>", conn.RemoteAddr())
 
-	_, p, err := conn.ReadMessage()
-	if err != nil {
-		log.Printf("Error receiving message on connect: %v", err)
-		conn.Close()
-		return
-	}
+	// _, p, err := conn.ReadMessage()
+	// if err != nil {
+	// 	log.Printf("Error receiving message on connect: %v", err)
+	// 	conn.Close()
+	// 	return
+	// }
 
-	m, err := dto.ToMessage(p)
-	if err != nil {
-		log.Println("Error parsing connection payload")
-		conn.Close()
-		return
-	}
+	// m, err := dto.ToMessage(p)
+	// if err != nil {
+	// 	log.Println("Error parsing connection payload")
+	// 	conn.Close()
+	// 	return
+	// }
 
-	if err := isAuthorised(r.Context(), hub.Svc.Room, *clientId, m.RoomID); err != nil {
-		log.Printf("Unauthorised client: %v", err)
-		conn.Close()
-		return
-	}
+	// if err := isAuthorised(r.Context(), hub.Svc.Room, *clientId, m.RoomID); err != nil {
+	// 	log.Printf("Unauthorised client: %v", err)
+	// 	conn.Close()
+	// 	return
+	// }
 
-	client := chat.NewClient(conn, clientId.String(), hub.Svc)
-	hub.HandleConnection(m.RoomID.String(), client)
+	client := chat.NewClient(conn, clientId.String(), hub)
+	hub.HandleNewClient(client)
 }

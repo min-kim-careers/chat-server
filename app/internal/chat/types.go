@@ -7,28 +7,30 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Client struct {
-	id     string
-	svc    *service.Services
-	ctx    context.Context
-	cancel context.CancelFunc
-	conn   *websocket.Conn
-}
-
 type Hub struct {
-	Svc              *service.Services
-	Rooms            map[string]*Room
-	RoomRegister     chan *Room
-	RoomUnregister   chan *Room
-	Clients          map[string]*Client
-	ClientRegister   chan *Client
-	ClientUnregister chan *Client
+	svc              *service.Services
+	rooms            map[string]*Room
+	roomRegister     chan *Room
+	roomUnregister   chan *Room
+	clients          map[string]*Client
+	clientRegister   chan *Client
+	clientUnregister chan *Client
 }
 
 type Room struct {
-	Hub        *Hub
-	ID         string
-	Clients    map[string]*Client
-	Register   chan *Client
-	Unregister chan *Client
+	hub              *Hub
+	id               string
+	clients          map[string]*Client
+	clientRegister   chan *Client
+	clientUnregister chan *Client
+}
+
+type Client struct {
+	hub     *Hub
+	room    *Room
+	id      string
+	ctx     context.Context
+	cancel  context.CancelFunc
+	conn    *websocket.Conn
+	channel chan []byte
 }

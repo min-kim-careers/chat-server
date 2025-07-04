@@ -4,6 +4,7 @@ import (
 	"chat-server/internal/db/gen"
 	"context"
 	"errors"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -28,7 +29,7 @@ func (r *RoomRepo) GetRoomByIdAndClient(ctx context.Context, arg gen.GetRoomById
 	if !arg.ID.Valid || !arg.ClientID.Valid {
 		return gen.Room{}, errors.New("invalid arg")
 	}
-
+	log.Println(arg)
 	return r.q.GetRoomByIdAndClient(ctx, arg)
 }
 

@@ -26,25 +26,31 @@ func validateMessageOut(m *MessageOut) bool {
 		return false
 	}
 
-	mode, valid := MessageModes[m.Mode]
+	_, valid := MessageModes[m.Mode]
 	if !valid {
 		log.Println("Invalid message mode:", m.Mode)
 		return false
 	}
 
-	switch mode {
-	case "restore":
-
-	}
-
 	return true
+}
+
+func NewMessagePayload(m *MessageOut) ([]byte, error) {
+	if !validateMessageOut(m) {
+		return nil, errors.New("invalid message out")
+	}
+	p, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func ToMessageOut(p []byte, clientID string) (*MessageOut, error) {
 	var m Message
 	err := json.Unmarshal(p, &m)
 	if err != nil {
-		log.Printf("Error unmarshalling cached message: %v", err)
+		log.Printf("Error unmarshalling message out: %v", err)
 		return nil, err
 	}
 
