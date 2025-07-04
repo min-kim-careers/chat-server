@@ -80,6 +80,7 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 }
 
 func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID, clientID uuid.UUID) (*dto.RoomOut, error) {
+	log.Println(roomID, clientID)
 	row, err := s.r.GetRoomByIdAndClient(ctx, gen.GetRoomByIdAndClientParams{
 		ID:       helper.ToDBUUID(roomID),
 		ClientID: helper.ToDBUUID(clientID),

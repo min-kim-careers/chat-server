@@ -37,11 +37,14 @@ func validateMessage(m *Message) bool {
 	switch mode {
 	case "restore":
 		if m.CreatedAt.IsZero() {
-			log.Println(m.CreatedAt)
-			log.Println("Restore missing created at")
+			log.Println("missing CreatedAt")
 			return false
 		}
-		return true
+	case "join":
+		if m.RoomID == uuid.Nil {
+			log.Println("missing RoomID")
+			return false
+		}
 	}
 
 	return true

@@ -3,55 +3,65 @@ package chat
 import (
 	"log"
 
+	"chat-server/internal/dto"
 	"chat-server/internal/service"
 )
 
 func NewHub(svc *service.Services) *Hub {
 	return &Hub{
-		Svc:              svc,
-		Rooms:            make(map[string]*Room),
-		RoomRegister:     make(chan *Room),
-		RoomUnregister:   make(chan *Room),
-		Clients:          make(map[string]*Client),
-		ClientRegister:   make(chan *Client),
-		ClientUnregister: make(chan *Client),
+		svc:              svc,
+		rooms:            make(map[string]*Room),
+		roomRegister:     make(chan *Room),
+		roomUnregister:   make(chan *Room),
+		clients:          make(map[string]*Client),
+		clientRegister:   make(chan *Client),
+		clientUnregister: make(chan *Client),
 	}
 }
 
-func (h *Hub) addRoom(roomID string) *Room {
-	room, exists := h.Rooms[roomID]
-	if !exists {
-		newRoom := NewRoom(h, roomID)
-		log.Printf("Room <%s> created.", roomID)
-		h.RoomRegister <- newRoom
-		newRoom.Run()
-		room = newRoom
-	} else {
-		log.Printf("Room <%s> found in hub.", roomID)
-	}
-	return room
+func (h *Hub) HandleNewClient(c *Client) {
+	h.clientRegister <- c
 }
 
-func (h *Hub) HandleConnection(roomID string, newClient *Client) {
-	room := h.addRoom(roomID)
+func (h *Hub) registerRoom(r *Room) {
+	h.rooms[r.id] = r
+	log.Printf("Room <%s> registered to hub.", r.id)
+}
 
-	h.ClientRegister <- newClient
-	room.AddClient(newClient)
+func (h *Hub) unregisterRoom(r *Room) {
+	if _, exists := h.rooms[r.id]; exists {
+		delete(h.rooms, r.id)
+		log.Printf("Room <%s> unregistered from hub.", r.id)
+	}
+}
+
+func (h *Hub) registerClient(c *Client) {
+	h.clients[c.id] = c
+	log.Printf("Client <%s> registered to hub.", c.id)
+	p, err := dto.NewMessagePayload(&dto.MessageOut{
+		Mode: "connected",
+	})
+	if err != nil {
+		return
+	}
+	c.channel <- p
+}
+
+func (h *Hub) unregisterClient(c *Client) {
+	if _, exists := h.clients[c.id]; exists {
+		c.cancel()
+		delete(h.clients, c.id)
+		log.Printf("Client <%s> unregistered from hub.", c.id)
+	}
 }
 
 func (h *Hub) HandleRoomRegistrations() {
 	for {
 		select {
-
-		case room := <-h.RoomRegister:
-			h.Rooms[room.ID] = room
-			log.Printf("Room <%s> registered to hub.", room.ID)
-
-		case room := <-h.RoomUnregister:
-			if _, exists := h.Rooms[room.ID]; exists {
-				delete(h.Rooms, room.ID)
-				log.Printf("Room <%s> unregistered from hub.", room.ID)
-			}
+		case r := <-h.roomRegister:
+			h.registerRoom(r)
+		case r := <-h.roomUnregister:
+			h.unregisterRoom(r)
 		}
 	}
 }
@@ -59,17 +69,10 @@ func (h *Hub) HandleRoomRegistrations() {
 func (h *Hub) HandleClientRegistrations() {
 	for {
 		select {
-
-		case client := <-h.ClientRegister:
-			h.Clients[client.id] = client
-			log.Printf("Client <%s> registered to hub.", client.id)
-
-		case client := <-h.ClientUnregister:
-			if _, exists := h.Clients[client.id]; exists {
-				client.cancel()
-				delete(h.Clients, client.id)
-				log.Printf("Client <%s> unregistered from hub.", client.id)
-			}
+		case c := <-h.clientRegister:
+			h.registerClient(c)
+		case c := <-h.clientUnregister:
+			h.unregisterClient(c)
 		}
 	}
 }
