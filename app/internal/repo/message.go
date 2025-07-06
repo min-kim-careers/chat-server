@@ -20,3 +20,14 @@ func (r *MessageRepo) GetMessages(ctx context.Context, arg gen.GetAllMessagesBef
 	}
 	return r.q.GetAllMessagesBeforeCreatedAt(ctx, arg)
 }
+
+func (r *MessageRepo) BulkInsertMessages(ctx context.Context, arg []gen.BulkInsertMessagesParams) (int64, error) {
+	if len(arg) == 0 {
+		return 0, errors.New("invalid params")
+	}
+	return r.q.BulkInsertMessages(ctx, arg)
+}
+
+// if arg.Mode == "" || !arg.RoomID.Valid || arg.ClientID == "" || !arg.CreatedAt.Valid || arg.Data != nil {
+// 	return []gen.Message{}, errors.New("invalid params")
+// }

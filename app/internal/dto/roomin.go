@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Room struct {
+type RoomIn struct {
 	ID        uuid.UUID `json:"id"`
 	ItemID    string    `json:"itemId"`
 	Client1   uuid.UUID `json:"client1"`

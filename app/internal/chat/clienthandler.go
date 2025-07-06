@@ -4,21 +4,36 @@ import (
 	"chat-server/internal/auth"
 	"chat-server/internal/constant"
 	"chat-server/internal/dto"
-	"chat-server/internal/helper"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-func (c *Client) handleChatMessage(m *dto.Message, roomID string) {
-	msgSvc := c.hub.svc.Message
-
-	m.ClientID = c.id
+func rehydrateChatMessage(m *dto.MessageIn, clientID string, roomID string) error {
+	_roomID, err := uuid.Parse(roomID)
+	if err != nil {
+		return fmt.Errorf("invalid room ID format for message: %+v", m)
+	}
+	m.RoomID = _roomID
+	m.ClientID = clientID
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = time.Now()
 	}
+	return nil
+}
+
+func (c *Client) handleChatMessage(m *dto.MessageIn, roomID string) {
+	err := rehydrateChatMessage(m, c.id, roomID)
+	if err != nil {
+		log.Printf("Error rehydrating chat message: %v", err)
+		return
+	}
+
+	msgSvc := c.hub.svc.Message
+
 	p, err := json.Marshal(m)
 	if err != nil {
 		log.Printf("Failed to marshal chat message from <%s>: %v", c.id, err)
@@ -33,30 +48,25 @@ func (c *Client) handleChatMessage(m *dto.Message, roomID string) {
 		return
 	}
 
-	if !msgSvc.MessageCacheIsFull(c.ctx, roomID) {
-		return
+	if msgSvc.MessageCacheIsFull(c.ctx, roomID) {
+		cachedMsgs, err := msgSvc.GetMessagesFromCache(c.ctx, roomID, c.id)
+		if err != nil {
+			log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
+			return
+		}
+		err = msgSvc.BulkInsertMessagesDB(c.ctx, cachedMsgs)
+		if err != nil {
+			log.Printf("Error bulk persisting messages for client <%s>: %v", c.id, err)
+			return
+		}
+		msgSvc.ClearMessageCache(c.ctx, roomID)
 	}
-
-	cachedMsgs, err := msgSvc.GetMessagesFromCache(c.ctx, roomID, c.id)
-	if err != nil {
-		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
-		return
-	}
-	if len(cachedMsgs) == 0 {
-		return
-	}
-
-	// if !c.services().BulkAddMessages(cachedMsgs) {
-	// 	return
-	// }
-
-	msgSvc.ClearMessageCache(c.ctx, roomID)
 }
 
-func (c *Client) handleRestoreMessage(m *dto.Message, roomID string) {
-	restoredMsgs := []*dto.MessageOut{}
+func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
+	restoredMsgs := []*dto.MessageOutChat{}
 
-	cachedMsgs, err := c.hub.svc.Message.GetMessagesFromCache(c.ctx, roomID, c.id)
+	cachedMsgs, err := c.hub.svc.Message.GetMessageOutsFromCache(c.ctx, roomID, c.id)
 	if err != nil {
 		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
@@ -69,7 +79,7 @@ func (c *Client) handleRestoreMessage(m *dto.Message, roomID string) {
 			log.Println("Error parsing room ID:", err)
 			return
 		}
-		dbMsgs, err := c.hub.svc.Message.GetMessagesFromDB(
+		dbMsgs, err := c.hub.svc.Message.GetMessagesDB(
 			c.ctx,
 			_roomID,
 			m.CreatedAt,
@@ -83,23 +93,19 @@ func (c *Client) handleRestoreMessage(m *dto.Message, roomID string) {
 		restoredMsgs = append(restoredMsgs, dbMsgs...)
 	}
 
-	data, err := helper.ToRawMessages(restoredMsgs)
-	if err != nil {
-		log.Printf("Error encoding restored messages for client <%s> in room <%s>: %v", c.id, roomID, err)
-		return
+	_m := &dto.MessageOutRestore{
+		Mode:     "restored",
+		Messages: restoredMsgs,
 	}
 
-	p, err := dto.NewMessagePayload(&dto.MessageOut{
-		Mode: "restored",
-		Data: data,
-	})
+	p, err := json.Marshal(_m)
 	if err != nil {
 		return
 	}
 	c.channel <- p
 }
 
-func (c *Client) handleJoinMessage(m *dto.Message) {
+func (c *Client) handleJoinMessage(m *dto.MessageIn) {
 	err := auth.IsAuthorised(c.ctx, c.hub.svc.Room, c.id, m.RoomID)
 	if err != nil {
 		log.Printf("Unauthorised user <%s>: %v", c.id, err)
