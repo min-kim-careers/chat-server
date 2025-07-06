@@ -1,10 +1,16 @@
 -- name: CreateMessage :one
 INSERT INTO
-  messages (mode, room_id, client_id, created_at, data)
+  messages (room_id, client_id, created_at, content)
 VALUES
-  ($1, $2, $3, $4, $5)
+  ($1, $2, $3, $4)
 RETURNING
   *;
+
+-- name: BulkInsertMessages :copyfrom
+INSERT INTO
+  messages (room_id, client_id, created_at, content)
+VALUES
+  ($1, $2, $3, $4);
 
 -- name: GetAllMessagesByRoomID :many
 SELECT

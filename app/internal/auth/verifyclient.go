@@ -7,7 +7,22 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type AuthResponse[T any] struct {
+	Message string `json:"message"`
+	Data    T      `json:"data"`
+}
+
+type VerifyTokenRequest struct {
+	IDToken string `json:"idToken"`
+}
+
+type VerifyTokenResponse struct {
+	UserID uuid.UUID `json:"userId"`
+}
 
 var authUrl = os.Getenv("AUTH_URL")
 var authKey = os.Getenv("AUTH_KEY")
@@ -18,7 +33,7 @@ func attachServiceKey(req *http.Request) {
 	req.Header.Set(authKeyHeader, authKey)
 }
 
-func VerifyToken(idToken string) (*VerifyTokenResponse, bool) {
+func verifyToken(idToken string) (*VerifyTokenResponse, bool) {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	reqBody, err := json.Marshal(VerifyTokenRequest{IDToken: idToken})
@@ -53,4 +68,19 @@ func VerifyToken(idToken string) (*VerifyTokenResponse, bool) {
 
 	log.Printf("Token verified: %+v", result)
 	return &result.Data, true
+}
+
+func VerifyClient(r *http.Request) *uuid.UUID {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		log.Printf("Verification token missing")
+		return nil
+	}
+
+	resp, ok := verifyToken(token)
+	if !ok {
+		return nil
+	}
+
+	return &resp.UserID
 }

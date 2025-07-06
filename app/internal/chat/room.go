@@ -6,6 +6,14 @@ import (
 	"log"
 )
 
+type Room struct {
+	hub              *Hub
+	id               string
+	clients          map[string]*Client
+	clientRegister   chan *Client
+	clientUnregister chan *Client
+}
+
 func NewRoom(hub *Hub, id string) *Room {
 	r := &Room{
 		hub:              hub,
@@ -22,7 +30,7 @@ func (r *Room) registerClient(c *Client) {
 	r.clients[c.id] = c
 	c.room = r
 	log.Printf("Client <%s> joined room <%s>.", c.id, r.id)
-	p, err := dto.NewMessagePayload(&dto.MessageOut{
+	p, err := dto.ToRawMessageOut(&dto.MessageOut{
 		Mode: "joined",
 	})
 	if err != nil {
@@ -36,7 +44,7 @@ func (r *Room) unregisterClient(c *Client) {
 		delete(r.clients, c.id)
 		c.room = nil
 		log.Printf("Client <%s> left room <%s>.", c.id, r.id)
-		p, err := dto.NewMessagePayload(&dto.MessageOut{
+		p, err := dto.ToRawMessageOut(&dto.MessageOut{
 			Mode: "left",
 		})
 		if err != nil {

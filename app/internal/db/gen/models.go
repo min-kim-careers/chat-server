@@ -10,12 +10,11 @@ import (
 
 type Message struct {
 	ID        int32            `json:"id"`
-	Mode      string           `json:"mode"`
 	RoomID    pgtype.UUID      `json:"room_id"`
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
-	Data      []byte           `json:"data"`
 	Read      bool             `json:"read"`
+	Content   string           `json:"content"`
 }
 
 type Room struct {

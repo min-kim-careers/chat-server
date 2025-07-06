@@ -31,7 +31,7 @@ func NewMessageService(r *repo.MessageRepo, db *db.DB, c *cache.Cache) *MessageS
 	}
 }
 
-func (s *MessageService) GetMessagesFromDB(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*dto.MessageOut, error) {
+func (s *MessageService) GetMessagesDB(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*dto.MessageOutChat, error) {
 	if roomID == uuid.Nil || createdAt.IsZero() || limit < 1 {
 		return nil, errors.New("invalid params")
 	}
@@ -45,11 +45,38 @@ func (s *MessageService) GetMessagesFromDB(ctx context.Context, roomID uuid.UUID
 		return nil, err
 	}
 
-	dtos := make([]*dto.MessageOut, len(rows))
+	dtos := make([]*dto.MessageOutChat, len(rows))
 	for i, r := range rows {
-		dtos[i] = dbMessageToDTO(r, clientID)
+		dtos[len(dtos)-1-i] = dbMessageToDTO(r, clientID)
 	}
 
 	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), roomID)
 	return dtos, nil
+}
+
+func (s *MessageService) BulkInsertMessagesDB(ctx context.Context, chats []*dto.MessageOutChat) error {
+	if len(chats) == 0 {
+		return errors.New("no messages to insert")
+	}
+
+	argMsgs := make([]gen.BulkInsertMessagesParams, len(chats))
+	for i, c := range chats {
+		argMsgs[i] = gen.BulkInsertMessagesParams{
+			RoomID:    helper.ToDBUUID(c.RoomID),
+			ClientID:  c.ClientID,
+			CreatedAt: helper.ToDBTimestamp(c.CreatedAt),
+			Content:   c.Content,
+		}
+	}
+
+	count, err := s.r.BulkInsertMessages(ctx, argMsgs)
+	if err != nil {
+		return err
+	}
+	if int(count) != len(chats) {
+		log.Printf("%d messages given but %d inserted", len(chats), count)
+	}
+
+	log.Printf("Persisted %d messages", count)
+	return nil
 }

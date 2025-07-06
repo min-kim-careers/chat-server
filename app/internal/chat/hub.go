@@ -7,6 +7,16 @@ import (
 	"chat-server/internal/service"
 )
 
+type Hub struct {
+	svc              *service.Services
+	rooms            map[string]*Room
+	roomRegister     chan *Room
+	roomUnregister   chan *Room
+	clients          map[string]*Client
+	clientRegister   chan *Client
+	clientUnregister chan *Client
+}
+
 func NewHub(svc *service.Services) *Hub {
 	return &Hub{
 		svc:              svc,
@@ -38,7 +48,7 @@ func (h *Hub) unregisterRoom(r *Room) {
 func (h *Hub) registerClient(c *Client) {
 	h.clients[c.id] = c
 	log.Printf("Client <%s> registered to hub.", c.id)
-	p, err := dto.NewMessagePayload(&dto.MessageOut{
+	p, err := dto.ToRawMessageOut(&dto.MessageOut{
 		Mode: "connected",
 	})
 	if err != nil {

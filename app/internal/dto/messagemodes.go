@@ -7,6 +7,7 @@ var MessageModes = map[string]string{
 	"joined":    "joined",
 	"left":      "left",
 	"empty":     "empty",
+	"typing":    "typing",
 
 	// Actions
 	"chat":       "chat",

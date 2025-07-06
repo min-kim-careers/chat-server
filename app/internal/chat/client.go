@@ -4,11 +4,20 @@ import (
 	"chat-server/internal/dto"
 
 	"context"
-	"encoding/json"
 	"log"
 
 	"github.com/gorilla/websocket"
 )
+
+type Client struct {
+	hub     *Hub
+	room    *Room
+	id      string
+	ctx     context.Context
+	cancel  context.CancelFunc
+	conn    *websocket.Conn
+	channel chan []byte
+}
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,19 +40,7 @@ func (c *Client) hasRoom() bool {
 // send to client/browser
 func (c *Client) send() {
 	for p := range c.channel {
-		m, err := dto.ToMessageOut(p, c.id)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		_p, err := json.Marshal(m)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		err = c.conn.WriteMessage(websocket.TextMessage, _p)
+		err := c.conn.WriteMessage(websocket.TextMessage, p)
 		if err != nil {
 			log.Printf("Error sending message to client <%s>: %v", c.id, err)
 			continue
@@ -62,7 +59,7 @@ func (c *Client) read() {
 			return
 		}
 
-		m, err := dto.ToMessage(p)
+		m, err := dto.ToMessageIn(p)
 		if err != nil {
 			log.Printf("Error parsing payload from client <%s>: <%v>", c.id, err)
 			continue

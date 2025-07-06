@@ -11,47 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createMessage = `-- name: CreateMessage :one
-INSERT INTO
-  messages (mode, room_id, client_id, created_at, data)
-VALUES
-  ($1, $2, $3, $4, $5)
-RETURNING
-  id, mode, room_id, client_id, created_at, data, read
-`
-
-type CreateMessageParams struct {
-	Mode      string           `json:"mode"`
+type BulkInsertMessagesParams struct {
 	RoomID    pgtype.UUID      `json:"room_id"`
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
-	Data      []byte           `json:"data"`
+	Content   string           `json:"content"`
+}
+
+const createMessage = `-- name: CreateMessage :one
+INSERT INTO
+  messages (room_id, client_id, created_at, content)
+VALUES
+  ($1, $2, $3, $4)
+RETURNING
+  id, room_id, client_id, created_at, read, content
+`
+
+type CreateMessageParams struct {
+	RoomID    pgtype.UUID      `json:"room_id"`
+	ClientID  string           `json:"client_id"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Content   string           `json:"content"`
 }
 
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, createMessage,
-		arg.Mode,
 		arg.RoomID,
 		arg.ClientID,
 		arg.CreatedAt,
-		arg.Data,
+		arg.Content,
 	)
 	var i Message
 	err := row.Scan(
 		&i.ID,
-		&i.Mode,
 		&i.RoomID,
 		&i.ClientID,
 		&i.CreatedAt,
-		&i.Data,
 		&i.Read,
+		&i.Content,
 	)
 	return i, err
 }
 
 const getAllMessagesBeforeCreatedAt = `-- name: GetAllMessagesBeforeCreatedAt :many
 SELECT
-  id, mode, room_id, client_id, created_at, data, read
+  id, room_id, client_id, created_at, read, content
 FROM
   messages
 WHERE
@@ -80,12 +84,11 @@ func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllM
 		var i Message
 		if err := rows.Scan(
 			&i.ID,
-			&i.Mode,
 			&i.RoomID,
 			&i.ClientID,
 			&i.CreatedAt,
-			&i.Data,
 			&i.Read,
+			&i.Content,
 		); err != nil {
 			return nil, err
 		}
@@ -99,7 +102,7 @@ func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllM
 
 const getAllMessagesByRoomID = `-- name: GetAllMessagesByRoomID :many
 SELECT
-  id, mode, room_id, client_id, created_at, data, read
+  id, room_id, client_id, created_at, read, content
 FROM
   messages
 WHERE
@@ -119,12 +122,11 @@ func (q *Queries) GetAllMessagesByRoomID(ctx context.Context, roomID pgtype.UUID
 		var i Message
 		if err := rows.Scan(
 			&i.ID,
-			&i.Mode,
 			&i.RoomID,
 			&i.ClientID,
 			&i.CreatedAt,
-			&i.Data,
 			&i.Read,
+			&i.Content,
 		); err != nil {
 			return nil, err
 		}

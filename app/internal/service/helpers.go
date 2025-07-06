@@ -24,12 +24,11 @@ func dbRoomToDTO(r gen.Room) *dto.RoomOut {
 	}
 }
 
-func dbMessageToDTO(m gen.Message, clientID string) *dto.MessageOut {
-	return &dto.MessageOut{
-		Mode:      m.Mode,
+func dbMessageToDTO(m gen.Message, clientID string) *dto.MessageOutChat {
+	return &dto.MessageOutChat{
 		CreatedAt: m.CreatedAt.Time,
-		Data:      m.Data,
 		Read:      m.Read,
 		IsMine:    m.ClientID == clientID,
+		Content:   m.Content,
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Message struct {
+type MessageIn struct {
 	Mode      string          `json:"mode"`
 	RoomID    uuid.UUID       `json:"roomId"`
 	ClientID  string          `json:"clientId"`
@@ -19,7 +19,7 @@ type Message struct {
 	Read      bool            `json:"read"`
 }
 
-func validateMessage(m *Message) bool {
+func ValidateMessageIn(m *MessageIn) bool {
 	validate := validator.New()
 
 	err := validate.Struct(m)
@@ -50,13 +50,13 @@ func validateMessage(m *Message) bool {
 	return true
 }
 
-func ToMessage(p []byte) (*Message, error) {
-	var m Message
+func ToMessageIn(p []byte) (*MessageIn, error) {
+	var m MessageIn
 	err := json.Unmarshal(p, &m)
 	if err != nil {
 		return nil, err
 	}
-	if !validateMessage(&m) {
+	if !ValidateMessageIn(&m) {
 		return nil, errors.New("invalid message format")
 	}
 	return &m, nil
