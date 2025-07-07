@@ -11,15 +11,15 @@ import (
 )
 
 type MessageIn struct {
-	Mode      string          `json:"mode"`
-	RoomID    uuid.UUID       `json:"roomId"`
-	ClientID  string          `json:"clientId"`
-	CreatedAt time.Time       `json:"createdAt"`
-	Data      json.RawMessage `json:"data"`
-	Read      bool            `json:"read"`
+	Mode      string    `json:"mode"`
+	RoomID    uuid.UUID `json:"roomId"`
+	ClientID  string    `json:"clientId"`
+	CreatedAt time.Time `json:"createdAt"`
+	Content   string    `json:"content"`
+	Read      bool      `json:"read"`
 }
 
-func ValidateMessageIn(m *MessageIn) bool {
+func validateMessageIn(m *MessageIn) bool {
 	validate := validator.New()
 
 	err := validate.Struct(m)
@@ -35,6 +35,11 @@ func ValidateMessageIn(m *MessageIn) bool {
 	}
 
 	switch mode {
+	case "chat":
+		if len(m.Content) == 0 {
+			log.Println("blank chat message")
+			return false
+		}
 	case "restore":
 		if m.CreatedAt.IsZero() {
 			log.Println("missing CreatedAt")
@@ -56,7 +61,7 @@ func ToMessageIn(p []byte) (*MessageIn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !ValidateMessageIn(&m) {
+	if !validateMessageIn(&m) {
 		return nil, errors.New("invalid message format")
 	}
 	return &m, nil

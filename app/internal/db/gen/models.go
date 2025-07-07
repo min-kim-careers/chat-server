@@ -9,7 +9,7 @@ import (
 )
 
 type Message struct {
-	ID        int32            `json:"id"`
+	ID        pgtype.UUID      `json:"id"`
 	RoomID    pgtype.UUID      `json:"room_id"`
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`

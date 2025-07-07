@@ -29,9 +29,11 @@ func (r *iteratorForBulkInsertMessages) Next() bool {
 
 func (r iteratorForBulkInsertMessages) Values() ([]interface{}, error) {
 	return []interface{}{
+		r.rows[0].ID,
 		r.rows[0].RoomID,
 		r.rows[0].ClientID,
 		r.rows[0].CreatedAt,
+		r.rows[0].Read,
 		r.rows[0].Content,
 	}, nil
 }
@@ -41,5 +43,5 @@ func (r iteratorForBulkInsertMessages) Err() error {
 }
 
 func (q *Queries) BulkInsertMessages(ctx context.Context, arg []BulkInsertMessagesParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"messages"}, []string{"room_id", "client_id", "created_at", "content"}, &iteratorForBulkInsertMessages{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"messages"}, []string{"id", "room_id", "client_id", "created_at", "read", "content"}, &iteratorForBulkInsertMessages{rows: arg})
 }

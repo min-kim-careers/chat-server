@@ -12,33 +12,39 @@ import (
 )
 
 type BulkInsertMessagesParams struct {
+	ID        pgtype.UUID      `json:"id"`
 	RoomID    pgtype.UUID      `json:"room_id"`
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Read      bool             `json:"read"`
 	Content   string           `json:"content"`
 }
 
 const createMessage = `-- name: CreateMessage :one
 INSERT INTO
-  messages (room_id, client_id, created_at, content)
+  messages (id, room_id, client_id, created_at, read, content)
 VALUES
-  ($1, $2, $3, $4)
+  ($1, $2, $3, $4, $5, $6)
 RETURNING
   id, room_id, client_id, created_at, read, content
 `
 
 type CreateMessageParams struct {
+	ID        pgtype.UUID      `json:"id"`
 	RoomID    pgtype.UUID      `json:"room_id"`
 	ClientID  string           `json:"client_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
+	Read      bool             `json:"read"`
 	Content   string           `json:"content"`
 }
 
 func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, createMessage,
+		arg.ID,
 		arg.RoomID,
 		arg.ClientID,
 		arg.CreatedAt,
+		arg.Read,
 		arg.Content,
 	)
 	var i Message

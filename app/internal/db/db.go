@@ -21,8 +21,8 @@ func NewDB(ctx context.Context) *DB {
 		DBPool: initDBPool(ctx),
 	}
 
-	// db.RunRoomSchemaSQL(ctx)
-	// db.RunMessageSchemaSQL(ctx)
+	db.RunRoomSchemaSQL(ctx)
+	db.RunMessageSchemaSQL(ctx)
 
 	return db
 }
@@ -60,12 +60,12 @@ func initDBPool(ctx context.Context) *pgxpool.Pool {
 	dbConfig.ConnConfig.ConnectTimeout = defaultConnectTimeout
 
 	dbConfig.BeforeAcquire = func(ctx context.Context, c *pgx.Conn) bool {
-		log.Println("Acquiring a DB connection.")
+		// log.Println("Acquiring a DB connection.")
 		return true
 	}
 
 	dbConfig.AfterRelease = func(c *pgx.Conn) bool {
-		log.Println("Releasing a DB connection.")
+		// log.Println("Releasing a DB connection.")
 		return true
 	}
 

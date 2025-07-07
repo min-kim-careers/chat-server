@@ -1,6 +1,7 @@
 package service
 
 import (
+	"chat-server/internal/cache"
 	"chat-server/internal/db/gen"
 	"chat-server/internal/dto"
 	"chat-server/internal/helper"
@@ -15,7 +16,7 @@ func sortClientIds(client1 uuid.UUID, client2 uuid.UUID) (uuid.UUID, uuid.UUID) 
 	return client1, client2
 }
 
-func dbRoomToDTO(r gen.Room) *dto.RoomOut {
+func roomDBToDTO(r gen.Room) *dto.RoomOut {
 	return &dto.RoomOut{
 		ID:        helper.ToDTOUUID(r.ID),
 		ItemID:    r.ItemID,
@@ -24,11 +25,28 @@ func dbRoomToDTO(r gen.Room) *dto.RoomOut {
 	}
 }
 
-func dbMessageToDTO(m gen.Message, clientID string) *dto.MessageOutChat {
+func messageDBToDTO(m gen.Message, clientID string) *dto.MessageOutChat {
 	return &dto.MessageOutChat{
+		Mode:      "chat",
+		ID:        *helper.ToDTOUUID(m.ID),
 		CreatedAt: m.CreatedAt.Time,
 		Read:      m.Read,
 		IsMine:    m.ClientID == clientID,
 		Content:   m.Content,
 	}
+}
+
+func messageCacheToDTO(p string, clientID string) (*dto.MessageOutChat, error) {
+	c, err := cache.ToMessageCache(p)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.MessageOutChat{
+		Mode:      "chat",
+		ID:        c.ID,
+		CreatedAt: c.CreatedAt,
+		Read:      c.Read,
+		Content:   c.Content,
+		IsMine:    c.ClientID == clientID,
+	}, nil
 }

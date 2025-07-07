@@ -4,7 +4,6 @@ import (
 	"chat-server/internal/auth"
 	"chat-server/internal/constant"
 	"chat-server/internal/dto"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -26,6 +25,11 @@ func rehydrateChatMessage(m *dto.MessageIn, clientID string, roomID string) erro
 }
 
 func (c *Client) handleChatMessage(m *dto.MessageIn, roomID string) {
+	if !c.hasRoom() {
+		log.Printf("Client is not in a room")
+		return
+	}
+
 	err := rehydrateChatMessage(m, c.id, roomID)
 	if err != nil {
 		log.Printf("Error rehydrating chat message: %v", err)
@@ -34,39 +38,34 @@ func (c *Client) handleChatMessage(m *dto.MessageIn, roomID string) {
 
 	msgSvc := c.hub.svc.Message
 
-	p, err := json.Marshal(m)
-	if err != nil {
-		log.Printf("Failed to marshal chat message from <%s>: %v", c.id, err)
+	if !msgSvc.PublishChatMessage(c.ctx, roomID, m) {
 		return
 	}
 
-	if !msgSvc.PublishMessage(c.ctx, roomID, p) {
+	if !msgSvc.CacheChatMessage(c.ctx, roomID, m) {
 		return
 	}
 
-	if !msgSvc.CacheMessage(c.ctx, roomID, p) {
-		return
-	}
-
-	if msgSvc.MessageCacheIsFull(c.ctx, roomID) {
-		cachedMsgs, err := msgSvc.GetMessagesFromCache(c.ctx, roomID, c.id)
-		if err != nil {
-			log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
-			return
-		}
-		err = msgSvc.BulkInsertMessagesDB(c.ctx, cachedMsgs)
+	cacheSize := msgSvc.GetCacheSize(c.ctx, roomID)
+	if cacheSize >= constant.CACHE_LIMIT {
+		err = msgSvc.FlushCachedMessagesToDB(c.ctx, roomID, c.id, cacheSize)
 		if err != nil {
 			log.Printf("Error bulk persisting messages for client <%s>: %v", c.id, err)
 			return
 		}
-		msgSvc.ClearMessageCache(c.ctx, roomID)
+		msgSvc.ClearChatMessageCache(c.ctx, roomID)
 	}
 }
 
 func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
+	if !c.hasRoom() {
+		log.Printf("Client is not in a room")
+		return
+	}
+
 	restoredMsgs := []*dto.MessageOutChat{}
 
-	cachedMsgs, err := c.hub.svc.Message.GetMessageOutsFromCache(c.ctx, roomID, c.id)
+	cachedMsgs, err := c.hub.svc.Message.GetCachedChatMessages(c.ctx, roomID, c.id)
 	if err != nil {
 		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
 		return
@@ -79,7 +78,7 @@ func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
 			log.Println("Error parsing room ID:", err)
 			return
 		}
-		dbMsgs, err := c.hub.svc.Message.GetMessagesDB(
+		dbMsgs, err := c.hub.svc.Message.GetDBMessages(
 			c.ctx,
 			_roomID,
 			m.CreatedAt,
@@ -93,19 +92,23 @@ func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
 		restoredMsgs = append(restoredMsgs, dbMsgs...)
 	}
 
-	_m := &dto.MessageOutRestore{
+	p, err := dto.ToRawMessageOut(&dto.MessageOutRestore{
 		Mode:     "restored",
 		Messages: restoredMsgs,
-	}
-
-	p, err := json.Marshal(_m)
+	})
 	if err != nil {
+		log.Printf("Error parsing restore message: %v", err)
 		return
 	}
 	c.channel <- p
 }
 
 func (c *Client) handleJoinMessage(m *dto.MessageIn) {
+	if c.hasRoom() {
+		log.Printf("Client is already in a room")
+		return
+	}
+
 	err := auth.IsAuthorised(c.ctx, c.hub.svc.Room, c.id, m.RoomID)
 	if err != nil {
 		log.Printf("Unauthorised user <%s>: %v", c.id, err)
@@ -126,6 +129,11 @@ func (c *Client) handleJoinMessage(m *dto.MessageIn) {
 }
 
 func (c *Client) handleLeaveMessage() {
+	if !c.hasRoom() {
+		log.Printf("Client is not in a room")
+		return
+	}
+
 	if c.hasRoom() {
 		c.room.clientUnregister <- c
 	}
