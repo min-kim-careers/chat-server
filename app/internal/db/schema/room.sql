@@ -1,4 +1,4 @@
-CREATE TABLE rooms (
+CREATE TABLE IF NOT EXISTS rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_id TEXT NOT NULL,
   client1 UUID NOT NULL,

@@ -31,7 +31,7 @@ func NewRoomService(r *repo.RoomRepo, db *db.DB, c *cache.Cache) *RoomService {
 }
 
 func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*dto.RoomOut, error) {
-	if itemID == "" || client1 == uuid.Nil || client2 == uuid.Nil {
+	if itemID == "" || client1 == uuid.Nil || client2 == uuid.Nil || client1 == client2 {
 		return nil, errors.New("invalid params")
 	}
 
@@ -52,7 +52,7 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		dto := dbRoomToDTO(row)
+		dto := roomDBToDTO(row)
 		log.Printf("Existing room found: <%s>", dto.ID)
 		return dto, nil
 	}
@@ -73,14 +73,13 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		return nil, err
 	}
 
-	dto := dbRoomToDTO(row)
+	dto := roomDBToDTO(row)
 
 	log.Printf("Registered room ID: <%s>", dto.ID)
 	return dto, nil
 }
 
 func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID, clientID uuid.UUID) (*dto.RoomOut, error) {
-	log.Println(roomID, clientID)
 	row, err := s.r.GetRoomByIdAndClient(ctx, gen.GetRoomByIdAndClientParams{
 		ID:       helper.ToDBUUID(roomID),
 		ClientID: helper.ToDBUUID(clientID),
@@ -88,7 +87,7 @@ func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID
 	if err != nil {
 		return nil, err
 	}
-	dto := dbRoomToDTO(row)
+	dto := roomDBToDTO(row)
 	return dto, nil
 }
 
@@ -99,7 +98,7 @@ func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID)
 	}
 	dtos := make([]*dto.RoomOut, len(rows))
 	for i, r := range rows {
-		dtos[i] = dbRoomToDTO(r)
+		dtos[i] = roomDBToDTO(r)
 	}
 	return dtos, nil
 }

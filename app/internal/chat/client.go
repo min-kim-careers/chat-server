@@ -65,27 +65,18 @@ func (c *Client) read() {
 			continue
 		}
 
-		if c.hasRoom() {
-			switch m.Mode {
-			case "chat":
-				c.handleChatMessage(m, c.room.id)
-			case "restore":
-				c.handleRestoreMessage(m, c.room.id)
-			case "leave":
-				c.handleLeaveMessage()
-			case "disconnect":
-				c.handleDisconnectMessage()
-			}
-			continue
-		}
-
 		switch m.Mode {
-		case "join":
-			c.handleJoinMessage(m)
+		case "chat":
+			c.handleChatMessage(m, c.room.id)
+		case "restore":
+			c.handleRestoreMessage(m, c.room.id)
+		case "leave":
+			c.handleLeaveMessage()
 		case "disconnect":
 			c.handleDisconnectMessage()
+		case "join":
+			c.handleJoinMessage(m)
 		}
-
 	}
 
 }

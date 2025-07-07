@@ -2,27 +2,56 @@ package dto
 
 import (
 	"encoding/json"
-	"errors"
-	"log"
+	"fmt"
+	"reflect"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type MessageOut struct {
 	Mode string `json:"mode"`
 }
 
-func ValidateMessageOut(m *MessageOut) bool {
-	_, valid := MessageModes[m.Mode]
-	if !valid {
-		log.Println("Invalid message mode:", m.Mode)
-		return false
-	}
-
-	return true
+type MessageOutRestore struct {
+	Mode     string            `json:"mode"`
+	Messages []*MessageOutChat `json:"messages"`
 }
 
-func ToRawMessageOut(m *MessageOut) ([]byte, error) {
-	if !ValidateMessageOut(m) {
-		return nil, errors.New("invalid message out")
+type MessageOutChat struct {
+	Mode      string    `json:"mode"`
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	Read      bool      `json:"read"`
+	IsMine    bool      `json:"isMine"`
+	Content   string    `json:"content"`
+}
+
+func validateMessageOut(s any) error {
+	v := reflect.ValueOf(s)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Errorf("expected a struct, got %s", v.Kind())
+	}
+
+	mode := v.FieldByName("Mode")
+	if !mode.IsValid() {
+		return fmt.Errorf("field 'Mode' not found")
+	}
+
+	_, valid := MessageModes[mode.String()]
+	if !valid {
+		return fmt.Errorf("invalid message mode")
+	}
+
+	return nil
+}
+
+func ToRawMessageOut(m any) ([]byte, error) {
+	if err := validateMessageOut(m); err != nil {
+		return nil, err
 	}
 	p, err := json.Marshal(m)
 	if err != nil {

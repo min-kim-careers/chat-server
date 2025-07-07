@@ -52,6 +52,7 @@ func (h *Hub) registerClient(c *Client) {
 		Mode: "connected",
 	})
 	if err != nil {
+		log.Printf("Error parsing connected message: %v", err)
 		return
 	}
 	c.channel <- p

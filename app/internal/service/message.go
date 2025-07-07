@@ -31,7 +31,7 @@ func NewMessageService(r *repo.MessageRepo, db *db.DB, c *cache.Cache) *MessageS
 	}
 }
 
-func (s *MessageService) GetMessagesDB(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*dto.MessageOutChat, error) {
+func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*dto.MessageOutChat, error) {
 	if roomID == uuid.Nil || createdAt.IsZero() || limit < 1 {
 		return nil, errors.New("invalid params")
 	}
@@ -47,34 +47,42 @@ func (s *MessageService) GetMessagesDB(ctx context.Context, roomID uuid.UUID, cr
 
 	dtos := make([]*dto.MessageOutChat, len(rows))
 	for i, r := range rows {
-		dtos[len(dtos)-1-i] = dbMessageToDTO(r, clientID)
+		dtos[len(dtos)-1-i] = messageDBToDTO(r, clientID)
 	}
 
 	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), roomID)
 	return dtos, nil
 }
 
-func (s *MessageService) BulkInsertMessagesDB(ctx context.Context, chats []*dto.MessageOutChat) error {
-	if len(chats) == 0 {
-		return errors.New("no messages to insert")
+func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, roomID string, clientID string, cacheSize int64) error {
+	rows := s.c.Range(ctx, roomKey(roomID), cacheSize)
+	if len(rows) == 0 {
+		return nil
 	}
 
-	argMsgs := make([]gen.BulkInsertMessagesParams, len(chats))
-	for i, c := range chats {
-		argMsgs[i] = gen.BulkInsertMessagesParams{
+	cached := make([]gen.BulkInsertMessagesParams, len(rows))
+	for i, r := range rows {
+		c, err := cache.ToMessageCache(r)
+		if err != nil {
+			log.Printf("Error parsing cache rows")
+			return err
+		}
+		cached[i] = gen.BulkInsertMessagesParams{
+			ID:        helper.ToDBUUID(c.ID),
 			RoomID:    helper.ToDBUUID(c.RoomID),
 			ClientID:  c.ClientID,
 			CreatedAt: helper.ToDBTimestamp(c.CreatedAt),
 			Content:   c.Content,
+			Read:      c.Read,
 		}
 	}
 
-	count, err := s.r.BulkInsertMessages(ctx, argMsgs)
+	count, err := s.r.BulkInsertMessages(ctx, cached)
 	if err != nil {
 		return err
 	}
-	if int(count) != len(chats) {
-		log.Printf("%d messages given but %d inserted", len(chats), count)
+	if int(count) != len(cached) {
+		log.Printf("%d messages given but %d inserted", len(cached), count)
 	}
 
 	log.Printf("Persisted %d messages", count)

@@ -69,14 +69,14 @@ func (c *Cache) Publish(ctx context.Context, key string, p []byte) bool {
 	return true
 }
 
-func (c *Cache) IsFull(ctx context.Context, key string, limit int64) bool {
+func (c *Cache) Size(ctx context.Context, key string, limit int64) int64 {
 	count, err := c.client.LLen(ctx, key).Result()
 	if err != nil {
 		log.Printf("Error: LLEN for key <%s>: %v", key, err)
-		return false
+		return -1
 	}
 
-	return count >= limit
+	return count
 }
 
 func (c *Cache) Add(ctx context.Context, key string, p []byte) bool {

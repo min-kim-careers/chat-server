@@ -2,6 +2,7 @@ package chat
 
 import (
 	"chat-server/internal/dto"
+	"chat-server/internal/helper"
 	"context"
 	"log"
 )
@@ -34,6 +35,7 @@ func (r *Room) registerClient(c *Client) {
 		Mode: "joined",
 	})
 	if err != nil {
+		log.Printf("Error parsing joined message: %v", err)
 		return
 	}
 	c.channel <- p
@@ -48,6 +50,7 @@ func (r *Room) unregisterClient(c *Client) {
 			Mode: "left",
 		})
 		if err != nil {
+			log.Printf("Error parsing left message: %v", err)
 			return
 		}
 		c.channel <- p
@@ -85,7 +88,11 @@ func (r *Room) HandleClients() {
 
 	for data := range pubsub.Channel() {
 		p := []byte(data.Payload)
+		clientID := helper.GetSingleField(p, "clientId")
 		for _, c := range r.clients {
+			if c.id == string(clientID) {
+				continue
+			}
 			c.channel <- p
 		}
 	}
