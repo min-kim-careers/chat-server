@@ -18,7 +18,7 @@ func sortClientIds(client1 uuid.UUID, client2 uuid.UUID) (uuid.UUID, uuid.UUID) 
 
 func roomDBToDTO(r gen.Room) *dto.RoomOut {
 	return &dto.RoomOut{
-		ID:        helper.ToDTOUUID(r.ID),
+		ID:        helper.EncodeSlug(r.ID.Bytes[:]),
 		ItemID:    r.ItemID,
 		CreatedAt: r.CreatedAt.Time,
 		UpdatedAt: r.UpdatedAt.Time,

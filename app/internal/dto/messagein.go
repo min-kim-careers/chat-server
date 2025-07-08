@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"chat-server/internal/helper"
 	"encoding/json"
 	"errors"
 	"log"
@@ -11,12 +12,13 @@ import (
 )
 
 type MessageIn struct {
-	Mode      string    `json:"mode"`
-	RoomID    uuid.UUID `json:"roomId"`
-	ClientID  string    `json:"clientId"`
-	CreatedAt time.Time `json:"createdAt"`
-	Content   string    `json:"content"`
-	Read      bool      `json:"read"`
+	Mode      string     `json:"mode"`
+	RoomSlug  string     `json:"roomSlug,omitempty"`
+	RoomID    *uuid.UUID `json:"roomId,omitempty"`
+	ClientID  string     `json:"clientId,omitempty"`
+	CreatedAt time.Time  `json:"createdAt,omitempty"`
+	Content   string     `json:"content,omitempty"`
+	Read      bool       `json:"read,omitempty"`
 }
 
 func validateMessageIn(m *MessageIn) bool {
@@ -46,8 +48,8 @@ func validateMessageIn(m *MessageIn) bool {
 			return false
 		}
 	case "join":
-		if m.RoomID == uuid.Nil {
-			log.Println("missing RoomID")
+		if len(m.RoomSlug) == 0 {
+			log.Println("missing RoomSlug")
 			return false
 		}
 	}
@@ -55,14 +57,42 @@ func validateMessageIn(m *MessageIn) bool {
 	return true
 }
 
+func parseSlug(m *MessageIn) error {
+	if len(m.RoomSlug) == 0 {
+		return nil
+	}
+
+	roomID, err := helper.DecodeSlug(m.RoomSlug)
+	if err != nil {
+		log.Printf("Error decoding room slug: %s", m.RoomSlug)
+		return err
+	}
+
+	_roomID, err := uuid.FromBytes(roomID)
+	if err != nil {
+		log.Printf("Error parsing room slug")
+		return err
+	}
+
+	m.RoomID = &_roomID
+	return nil
+}
+
 func ToMessageIn(p []byte) (*MessageIn, error) {
-	var m MessageIn
+	var m *MessageIn
 	err := json.Unmarshal(p, &m)
+	if err != nil {
+		log.Printf("Error unmarshalling message: %s", &p)
+		return nil, err
+	}
+
+	err = parseSlug(m)
 	if err != nil {
 		return nil, err
 	}
-	if !validateMessageIn(&m) {
+
+	if !validateMessageIn(m) {
 		return nil, errors.New("invalid message format")
 	}
-	return &m, nil
+	return m, nil
 }

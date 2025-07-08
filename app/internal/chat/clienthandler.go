@@ -16,7 +16,7 @@ func rehydrateChatMessage(m *dto.MessageIn, clientID string, roomID string) erro
 	if err != nil {
 		return fmt.Errorf("invalid room ID format for message: %+v", m)
 	}
-	m.RoomID = _roomID
+	m.RoomID = &_roomID
 	m.ClientID = clientID
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = time.Now()
@@ -109,7 +109,7 @@ func (c *Client) handleJoinMessage(m *dto.MessageIn) {
 		return
 	}
 
-	err := auth.IsAuthorised(c.ctx, c.hub.svc.Room, c.id, m.RoomID)
+	err := auth.IsAuthorised(c.ctx, c.hub.svc.Room, c.id, *m.RoomID)
 	if err != nil {
 		log.Printf("Unauthorised user <%s>: %v", c.id, err)
 		return

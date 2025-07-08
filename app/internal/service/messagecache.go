@@ -26,10 +26,16 @@ func (s *MessageService) CacheChatMessage(ctx context.Context, roomID string, m 
 		log.Println(err)
 		return false
 	}
+	var _roomID uuid.UUID
+	if m.RoomID != nil {
+		_roomID = uuid.UUID{}
+	} else {
+		_roomID = *m.RoomID
+	}
 	p, err := json.Marshal(cache.Message{
 		ID:        id,
 		Mode:      m.Mode,
-		RoomID:    m.RoomID,
+		RoomID:    _roomID,
 		ClientID:  m.ClientID,
 		CreatedAt: m.CreatedAt,
 		Read:      m.Read,
