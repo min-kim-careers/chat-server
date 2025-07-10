@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"chat-server/internal/constant"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -41,7 +42,7 @@ func validateMessageOut(s any) error {
 		return fmt.Errorf("field 'Mode' not found")
 	}
 
-	_, valid := MessageModes[mode.String()]
+	_, valid := constant.ChatModes[mode.String()]
 	if !valid {
 		return fmt.Errorf("invalid message mode")
 	}

@@ -1,6 +1,6 @@
-package dto
+package constant
 
-var MessageModes = map[string]string{
+var ChatModes = map[string]string{
 	// Flags
 	"connected": "connected",
 	"restored":  "restored",
