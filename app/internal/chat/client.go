@@ -55,7 +55,12 @@ func (c *Client) read() {
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading payload from client <%s>: %v", c.id, err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Unexpected close error: %v", err)
+			} else {
+				log.Printf("Error reading payload from client <%s>: %v", c.id, err)
+			}
+			c.handleDisconnectMessage()
 			return
 		}
 

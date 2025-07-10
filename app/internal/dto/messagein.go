@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"chat-server/internal/constant"
 	"chat-server/internal/helper"
 	"encoding/json"
 	"errors"
@@ -30,7 +31,7 @@ func validateMessageIn(m *MessageIn) bool {
 		return false
 	}
 
-	mode, valid := MessageModes[m.Mode]
+	mode, valid := constant.ChatModes[m.Mode]
 	if !valid {
 		log.Println("Invalid message mode:", m.Mode)
 		return false
