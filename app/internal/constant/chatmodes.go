@@ -2,12 +2,13 @@ package constant
 
 var ChatModes = map[string]string{
 	// Flags
-	"connected": "connected",
-	"restored":  "restored",
-	"joined":    "joined",
-	"left":      "left",
-	"empty":     "empty",
-	"typing":    "typing",
+	"connected":  "connected",
+	"restored":   "restored",
+	"joined":     "joined",
+	"left":       "left",
+	"empty":      "empty",
+	"typing":     "typing",
+	"not_typing": "not_typing",
 
 	// Actions
 	"chat":       "chat",

@@ -10,26 +10,26 @@ import (
 )
 
 type Client struct {
-	hub     *Hub
-	room    *Room
-	id      string
-	ctx     context.Context
-	cancel  context.CancelFunc
-	conn    *websocket.Conn
-	channel chan []byte
+	hub       *Hub
+	room      *Room
+	id        string
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	conn      *websocket.Conn
+	channel   chan []byte
 }
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Client{
-		hub:     hub,
-		id:      id,
-		ctx:     ctx,
-		cancel:  cancel,
-		conn:    conn,
-		channel: make(chan []byte),
+		hub:       hub,
+		id:        id,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		conn:      conn,
+		channel:   make(chan []byte),
 	}
-	c.Run()
+	c.run()
 	return c
 }
 
@@ -43,7 +43,8 @@ func (c *Client) send() {
 		err := c.conn.WriteMessage(websocket.TextMessage, p)
 		if err != nil {
 			log.Printf("Error sending message to client <%s>: %v", c.id, err)
-			continue
+			c.ctxCancel()
+			return
 		}
 		log.Printf("Sent message to client <%s>: %v", c.id, string(p))
 	}
@@ -55,12 +56,8 @@ func (c *Client) read() {
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Unexpected close error: %v", err)
-			} else {
-				log.Printf("Error reading payload from client <%s>: %v", c.id, err)
-			}
-			c.handleDisconnectMessage()
+			log.Printf("Error reading payload from client <%s>: %v", c.id, err)
+			c.ctxCancel()
 			return
 		}
 
@@ -72,21 +69,30 @@ func (c *Client) read() {
 
 		switch m.Mode {
 		case "chat":
-			c.handleChatMessage(m, c.room.id)
+			c.handleChat(m)
 		case "restore":
-			c.handleRestoreMessage(m, c.room.id)
+			c.handleRestore(m)
 		case "leave":
-			c.handleLeaveMessage()
-		case "disconnect":
-			c.handleDisconnectMessage()
+			c.handleLeave()
 		case "join":
-			c.handleJoinMessage(m)
+			c.handleJoin(m)
+		case "typing":
+			c.handleTyping(m)
+		case "not_typing":
+			c.handleNotTyping(m)
 		}
 	}
-
 }
 
-func (c *Client) Run() {
+func (c *Client) handleClose() {
+	<-c.ctx.Done()
+	c.handleDisconnect()
+	close(c.channel)
+	c.channel = nil
+}
+
+func (c *Client) run() {
 	go c.read()
 	go c.send()
+	go c.handleClose()
 }
