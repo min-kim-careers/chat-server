@@ -60,13 +60,12 @@ func (h *Hub) registerClient(c *Client) {
 
 func (h *Hub) unregisterClient(c *Client) {
 	if _, exists := h.clients[c.id]; exists {
-		c.cancel()
 		delete(h.clients, c.id)
 		log.Printf("Client <%s> unregistered from hub.", c.id)
 	}
 }
 
-func (h *Hub) HandleRoomRegistrations() {
+func (h *Hub) handleRoomRegistrations() {
 	for {
 		select {
 		case r := <-h.roomRegister:
@@ -77,7 +76,7 @@ func (h *Hub) HandleRoomRegistrations() {
 	}
 }
 
-func (h *Hub) HandleClientRegistrations() {
+func (h *Hub) handleClientRegistrations() {
 	for {
 		select {
 		case c := <-h.clientRegister:
@@ -89,6 +88,6 @@ func (h *Hub) HandleClientRegistrations() {
 }
 
 func (h *Hub) Run() {
-	go h.HandleRoomRegistrations()
-	go h.HandleClientRegistrations()
+	go h.handleRoomRegistrations()
+	go h.handleClientRegistrations()
 }

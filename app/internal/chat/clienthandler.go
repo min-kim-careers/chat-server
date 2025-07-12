@@ -11,53 +11,53 @@ import (
 	"github.com/google/uuid"
 )
 
-func rehydrateChatMessage(m *dto.MessageIn, clientID string, roomID string) error {
-	_roomID, err := uuid.Parse(roomID)
+func hydrateChatMessage(m *dto.MessageIn, c *Client) error {
+	_roomID, err := uuid.Parse(c.room.id)
 	if err != nil {
 		return fmt.Errorf("invalid room ID format for message: %+v", m)
 	}
 	m.RoomID = &_roomID
-	m.ClientID = clientID
+	m.ClientID = c.id
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = time.Now()
 	}
 	return nil
 }
 
-func (c *Client) handleChatMessage(m *dto.MessageIn, roomID string) {
+func (c *Client) handleChat(m *dto.MessageIn) {
 	if !c.hasRoom() {
 		log.Printf("Client is not in a room")
 		return
 	}
 
-	err := rehydrateChatMessage(m, c.id, roomID)
+	err := hydrateChatMessage(m, c)
 	if err != nil {
-		log.Printf("Error rehydrating chat message: %v", err)
+		log.Printf("Error hydrating chat message: %v", err)
 		return
 	}
 
 	msgSvc := c.hub.svc.Message
 
-	if !msgSvc.PublishChatMessage(c.ctx, roomID, m) {
+	if !msgSvc.PublishChatMessage(c.ctx, c.room.id, m) {
 		return
 	}
 
-	if !msgSvc.CacheChatMessage(c.ctx, roomID, m) {
+	if !msgSvc.CacheChatMessage(c.ctx, c.room.id, m) {
 		return
 	}
 
-	cacheSize := msgSvc.GetCacheSize(c.ctx, roomID)
+	cacheSize := msgSvc.GetCacheSize(c.ctx, c.room.id)
 	if cacheSize >= constant.CACHE_LIMIT {
-		err = msgSvc.FlushCachedMessagesToDB(c.ctx, roomID, c.id, cacheSize)
+		err = msgSvc.FlushCachedMessagesToDB(c.ctx, c.room.id, c.id, cacheSize)
 		if err != nil {
 			log.Printf("Error bulk persisting messages for client <%s>: %v", c.id, err)
 			return
 		}
-		msgSvc.ClearChatMessageCache(c.ctx, roomID)
+		msgSvc.ClearChatMessageCache(c.ctx, c.room.id)
 	}
 }
 
-func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
+func (c *Client) handleRestore(m *dto.MessageIn) {
 	if !c.hasRoom() {
 		log.Printf("Client is not in a room")
 		return
@@ -65,15 +65,15 @@ func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
 
 	restoredMsgs := []*dto.MessageOutChat{}
 
-	cachedMsgs, err := c.hub.svc.Message.GetCachedChatMessages(c.ctx, roomID, c.id)
+	cachedMsgs, err := c.hub.svc.Message.GetCachedChatMessages(c.ctx, c.room.id, c.id)
 	if err != nil {
-		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, roomID, err)
+		log.Printf("Error fetching messages from cache for client <%s> in room <%s>: %v", c.id, c.room.id, err)
 		return
 	}
 	restoredMsgs = append(restoredMsgs, cachedMsgs...)
 
 	if len(cachedMsgs) != constant.RESTORE_LIMIT {
-		_roomID, err := uuid.Parse(roomID)
+		_roomID, err := uuid.Parse(c.room.id)
 		if err != nil {
 			log.Println("Error parsing room ID:", err)
 			return
@@ -86,7 +86,7 @@ func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
 			c.id,
 		)
 		if err != nil {
-			log.Printf("Error fetching messages from db for client <%s> in room <%s>: %v", c.id, roomID, err)
+			log.Printf("Error fetching messages from db for client <%s> in room <%s>: %v", c.id, c.room.id, err)
 			return
 		}
 		restoredMsgs = append(restoredMsgs, dbMsgs...)
@@ -103,9 +103,10 @@ func (c *Client) handleRestoreMessage(m *dto.MessageIn, roomID string) {
 	c.channel <- p
 }
 
-func (c *Client) handleJoinMessage(m *dto.MessageIn) {
+func (c *Client) handleJoin(m *dto.MessageIn) {
 	if c.hasRoom() {
-		log.Printf("Client is already in a room")
+		c.handleLeave()
+		c.handleJoin(m)
 		return
 	}
 
@@ -123,12 +124,15 @@ func (c *Client) handleJoinMessage(m *dto.MessageIn) {
 	}
 
 	newRoom := NewRoom(c.hub, m.RoomID.String())
+	if newRoom == nil {
+
+	}
 	c.hub.roomRegister <- newRoom
 	newRoom.clientRegister <- c
 	c.room = newRoom
 }
 
-func (c *Client) handleLeaveMessage() {
+func (c *Client) handleLeave() {
 	if !c.hasRoom() {
 		log.Printf("Client is not in a room")
 		return
@@ -136,13 +140,62 @@ func (c *Client) handleLeaveMessage() {
 
 	if c.hasRoom() {
 		c.room.clientUnregister <- c
+		c.room = nil
 	}
 }
 
-func (c *Client) handleDisconnectMessage() {
+func (c *Client) handleDisconnect() {
 	if c.hasRoom() {
 		c.room.clientUnregister <- c
 	}
 	c.hub.clientUnregister <- c
 	c.conn.Close()
+}
+
+func hydrateTypingMessage(m *dto.MessageIn, c *Client) error {
+	m.ClientID = c.id
+	return nil
+}
+
+func (c *Client) handleTyping(m *dto.MessageIn) {
+	if !c.hasRoom() {
+		log.Printf("Client is not in a room")
+		return
+	}
+
+	err := hydrateTypingMessage(m, c)
+	if err != nil {
+		log.Printf("Error hydrating typing message: %v", err)
+		return
+	}
+
+	msgSvc := c.hub.svc.Message
+
+	if !msgSvc.PublishChatMessage(c.ctx, c.room.id, m) {
+		log.Println("Error sending typing message")
+	}
+}
+
+func hydrateNotTypingMessage(m *dto.MessageIn, c *Client) error {
+	m.ClientID = c.id
+	return nil
+}
+
+func (c *Client) handleNotTyping(m *dto.MessageIn) {
+	if !c.hasRoom() {
+		log.Printf("Client is not in a room")
+		return
+	}
+
+	err := hydrateNotTypingMessage(m, c)
+	if err != nil {
+		log.Printf("Error hydrating typing message: %v", err)
+		return
+	}
+
+	msgSvc := c.hub.svc.Message
+
+	if !msgSvc.PublishChatMessage(c.ctx, c.room.id, m) {
+		log.Println("Error sending typing message")
+	}
 }

@@ -46,6 +46,7 @@ require (
 )
 
 require (
+	github.com/bcicen/grmon v0.0.0-20211013120613-63facda35286
 	github.com/buger/jsonparser v1.1.1
 	github.com/gin-gonic/gin v1.10.1
 	github.com/google/uuid v1.6.0

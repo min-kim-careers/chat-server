@@ -9,10 +9,17 @@ import (
 	"log"
 	"net/http"
 
+	grmon "github.com/bcicen/grmon/agent"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	grmon.Start()
+
 	services := service.NewServices()
 
 	// Hub
