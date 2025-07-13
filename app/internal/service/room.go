@@ -102,3 +102,21 @@ func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID)
 	}
 	return dtos, nil
 }
+
+func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*dto.RoomOut, error) {
+	room, err := s.r.GetRoomById(ctx, helper.ToDBUUID(roomID))
+	if err != nil {
+		return nil, err
+	}
+
+	return roomDBToDTO(room), nil
+}
+
+func (s *RoomService) DeleteRoomById(ctx context.Context, roomID uuid.UUID) error {
+	err := s.r.DeleteRoomById(ctx, helper.ToDBUUID(roomID))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

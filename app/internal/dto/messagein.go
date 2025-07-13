@@ -58,25 +58,24 @@ func validateMessageIn(m *MessageIn) bool {
 	return true
 }
 
-func parseSlug(m *MessageIn) error {
-	if len(m.RoomSlug) == 0 {
+func RoomSlugToID(roomSlug string) *uuid.UUID {
+	if len(roomSlug) == 0 {
 		return nil
 	}
 
-	roomID, err := helper.DecodeSlug(m.RoomSlug)
+	roomID, err := helper.DecodeSlug(roomSlug)
 	if err != nil {
-		log.Printf("Error decoding room slug: %s", m.RoomSlug)
-		return err
+		log.Printf("Error decoding room slug: %s", roomSlug)
+		return nil
 	}
 
 	_roomID, err := uuid.FromBytes(roomID)
 	if err != nil {
-		log.Printf("Error parsing room slug")
-		return err
+		log.Printf("Error parsing room slug to UUID")
+		return nil
 	}
 
-	m.RoomID = &_roomID
-	return nil
+	return &_roomID
 }
 
 func ToMessageIn(p []byte) (*MessageIn, error) {
@@ -87,9 +86,12 @@ func ToMessageIn(p []byte) (*MessageIn, error) {
 		return nil, err
 	}
 
-	err = parseSlug(m)
-	if err != nil {
-		return nil, err
+	if len(m.RoomSlug) > 0 {
+		roomID := RoomSlugToID(m.RoomSlug)
+		if roomID == nil {
+			return nil, errors.New("invalid room slug")
+		}
+		m.RoomID = roomID
 	}
 
 	if !validateMessageIn(m) {

@@ -21,21 +21,20 @@ func (s *MessageService) PublishChatMessage(ctx context.Context, roomID string, 
 }
 
 func (s *MessageService) CacheChatMessage(ctx context.Context, roomID string, m *dto.MessageIn) bool {
+	if m.RoomID == nil {
+		return false
+	}
+
 	id, err := uuid.NewUUID()
 	if err != nil {
 		log.Println(err)
 		return false
 	}
-	var _roomID uuid.UUID
-	if m.RoomID != nil {
-		_roomID = uuid.UUID{}
-	} else {
-		_roomID = *m.RoomID
-	}
+
 	p, err := json.Marshal(cache.Message{
 		ID:        id,
 		Mode:      m.Mode,
-		RoomID:    _roomID,
+		RoomID:    *m.RoomID,
 		ClientID:  m.ClientID,
 		CreatedAt: m.CreatedAt,
 		Read:      m.Read,

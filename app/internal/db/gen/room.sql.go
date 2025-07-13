@@ -40,6 +40,17 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 	return i, err
 }
 
+const deleteRoomById = `-- name: DeleteRoomById :exec
+DELETE FROM rooms
+WHERE
+  id = $1
+`
+
+func (q *Queries) DeleteRoomById(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRoomById, id)
+	return err
+}
+
 const getAllRoomsByClient = `-- name: GetAllRoomsByClient :many
 SELECT
   id, item_id, client1, client2, created_at, updated_at

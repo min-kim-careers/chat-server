@@ -59,66 +59,35 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 	return i, err
 }
 
-const getAllMessagesBeforeCreatedAt = `-- name: GetAllMessagesBeforeCreatedAt :many
+const getMessagesBeforeCreatedAt = `-- name: GetMessagesBeforeCreatedAt :many
 SELECT
   id, room_id, client_id, created_at, read, content
 FROM
-  messages
-WHERE
-  room_id = $1
-  AND created_at < $2
+  (
+    SELECT
+      id, room_id, client_id, created_at, read, content
+    FROM
+      messages
+    WHERE
+      room_id = $1
+      AND created_at < $2
+    ORDER BY
+      created_at DESC
+    LIMIT
+      $3
+  ) AS latest
 ORDER BY
-  created_at
-LIMIT
-  $3
+  created_at ASC
 `
 
-type GetAllMessagesBeforeCreatedAtParams struct {
+type GetMessagesBeforeCreatedAtParams struct {
 	RoomID    pgtype.UUID      `json:"room_id"`
 	CreatedAt pgtype.Timestamp `json:"created_at"`
 	Limit     int32            `json:"limit"`
 }
 
-func (q *Queries) GetAllMessagesBeforeCreatedAt(ctx context.Context, arg GetAllMessagesBeforeCreatedAtParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getAllMessagesBeforeCreatedAt, arg.RoomID, arg.CreatedAt, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Message
-	for rows.Next() {
-		var i Message
-		if err := rows.Scan(
-			&i.ID,
-			&i.RoomID,
-			&i.ClientID,
-			&i.CreatedAt,
-			&i.Read,
-			&i.Content,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getAllMessagesByRoomID = `-- name: GetAllMessagesByRoomID :many
-SELECT
-  id, room_id, client_id, created_at, read, content
-FROM
-  messages
-WHERE
-  room_id = $1
-ORDER BY
-  created_at
-`
-
-func (q *Queries) GetAllMessagesByRoomID(ctx context.Context, roomID pgtype.UUID) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getAllMessagesByRoomID, roomID)
+func (q *Queries) GetMessagesBeforeCreatedAt(ctx context.Context, arg GetMessagesBeforeCreatedAtParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getMessagesBeforeCreatedAt, arg.RoomID, arg.CreatedAt, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

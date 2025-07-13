@@ -14,11 +14,11 @@ func NewMessageRepo(q *gen.Queries) *MessageRepo {
 	return &MessageRepo{q: q}
 }
 
-func (r *MessageRepo) GetMessages(ctx context.Context, arg gen.GetAllMessagesBeforeCreatedAtParams) ([]gen.Message, error) {
+func (r *MessageRepo) GetMessages(ctx context.Context, arg gen.GetMessagesBeforeCreatedAtParams) ([]gen.Message, error) {
 	if !arg.RoomID.Valid || !arg.CreatedAt.Valid || arg.Limit < 1 {
 		return []gen.Message{}, errors.New("invalid params")
 	}
-	return r.q.GetAllMessagesBeforeCreatedAt(ctx, arg)
+	return r.q.GetMessagesBeforeCreatedAt(ctx, arg)
 }
 
 func (r *MessageRepo) BulkInsertMessages(ctx context.Context, arg []gen.BulkInsertMessagesParams) (int64, error) {

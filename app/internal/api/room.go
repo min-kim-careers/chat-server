@@ -1,6 +1,7 @@
 package api
 
 import (
+	"chat-server/internal/dto"
 	"chat-server/internal/service"
 	"log"
 	"net/http"
@@ -16,6 +17,10 @@ func RegisterRoomRoutes(rg *gin.RouterGroup, s *service.Services) {
 
 	rg.GET("/rooms/client/:clientID", func(c *gin.Context) {
 		getRoomsByClient(c, s)
+	})
+
+	rg.DELETE("/rooms/:roomSlug", func(c *gin.Context) {
+		deleteRoomById(c, s)
 	})
 }
 
@@ -53,7 +58,7 @@ func getRoomsByClient(c *gin.Context, s *service.Services) {
 	clientID := c.Param("clientID")
 	_clientID, err := uuid.Parse(clientID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, APIError{Message: "invalid id"})
+		c.JSON(http.StatusBadRequest, APIError{Message: "invalid client id"})
 		return
 	}
 
@@ -66,5 +71,25 @@ func getRoomsByClient(c *gin.Context, s *service.Services) {
 
 	c.JSON(http.StatusOK, APIResponse{Data: gin.H{
 		"rooms": rooms,
+	}})
+}
+
+func deleteRoomById(c *gin.Context, s *service.Services) {
+	roomSlug := c.Param("roomSlug")
+	roomID := dto.RoomSlugToID(roomSlug)
+	if roomID == nil {
+		c.JSON(http.StatusBadRequest, APIError{Message: "invalid room id"})
+		return
+	}
+
+	err := s.Room.DeleteRoomById(c, *roomID)
+	if err != nil {
+		log.Printf("Failed to delete room <%s>: %v", roomID, err)
+		c.JSON(http.StatusInternalServerError, APIError{Message: "failed to delete room by id"})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Data: gin.H{
+		"message": "deleted",
 	}})
 }

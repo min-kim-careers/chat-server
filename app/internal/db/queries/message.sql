@@ -12,25 +12,22 @@ INSERT INTO
 VALUES
   ($1, $2, $3, $4, $5, $6);
 
--- name: GetAllMessagesByRoomID :many
+-- name: GetMessagesBeforeCreatedAt :many
 SELECT
   *
 FROM
-  messages
-WHERE
-  room_id = $1
+  (
+    SELECT
+      *
+    FROM
+      messages
+    WHERE
+      room_id = $1
+      AND created_at < $2
+    ORDER BY
+      created_at DESC
+    LIMIT
+      $3
+  ) AS latest
 ORDER BY
-  created_at;
-
--- name: GetAllMessagesBeforeCreatedAt :many
-SELECT
-  *
-FROM
-  messages
-WHERE
-  room_id = $1
-  AND created_at < $2
-ORDER BY
-  created_at
-LIMIT
-  $3;
+  created_at ASC;
