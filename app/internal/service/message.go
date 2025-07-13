@@ -36,7 +36,7 @@ func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, cr
 		return nil, errors.New("invalid params")
 	}
 
-	rows, err := s.r.GetMessages(ctx, gen.GetAllMessagesBeforeCreatedAtParams{
+	rows, err := s.r.GetMessages(ctx, gen.GetMessagesBeforeCreatedAtParams{
 		RoomID:    helper.ToDBUUID(roomID),
 		CreatedAt: pgtype.Timestamp{Time: createdAt, Valid: true},
 		Limit:     int32(limit),

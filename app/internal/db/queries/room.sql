@@ -40,3 +40,8 @@ FROM
 WHERE
   id = $1
   AND @client_id IN (client1, client2);
+
+-- name: DeleteRoomById :exec
+DELETE FROM rooms
+WHERE
+  id = $1;

@@ -46,3 +46,17 @@ func (r *RoomRepo) GetAllRoomsByClient(ctx context.Context, clientID pgtype.UUID
 
 	return r.q.GetAllRoomsByClient(ctx, clientID)
 }
+
+func (r *RoomRepo) GetRoomById(ctx context.Context, id pgtype.UUID) (gen.Room, error) {
+	if !id.Valid {
+		return gen.Room{}, errors.New("invalid arg")
+	}
+	return r.q.GetRoomById(ctx, id)
+}
+
+func (r *RoomRepo) DeleteRoomById(ctx context.Context, id pgtype.UUID) error {
+	if !id.Valid {
+		return errors.New("invalid arg")
+	}
+	return r.q.DeleteRoomById(ctx, id)
+}

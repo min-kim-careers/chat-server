@@ -1,0 +1,3 @@
+#!/bin/bash
+
+sqlc generate -f app/internal/db/sqlc.yaml
