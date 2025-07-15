@@ -62,7 +62,7 @@ func verifyToken(idToken string) (*VerifyTokenResponse, bool) {
 
 	var result AuthResponse[VerifyTokenResponse]
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Println("Error decoding response:", err)
+		log.Println("error decoding response:", err)
 		return nil, false
 	}
 

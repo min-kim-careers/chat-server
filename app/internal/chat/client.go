@@ -1,10 +1,10 @@
 package chat
 
 import (
-	"chat-server/internal/dto"
-
+	"chat-server/internal/dto/messagein"
 	"context"
 	"log"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -17,6 +17,7 @@ type Client struct {
 	ctxCancel context.CancelFunc
 	conn      *websocket.Conn
 	channel   chan []byte
+	mu        sync.Mutex
 }
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
@@ -34,7 +35,21 @@ func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 }
 
 func (c *Client) hasRoom() bool {
-	return c.room != nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.room == nil {
+		log.Printf("room not found")
+		return false
+	}
+	return true
+}
+
+func (c *Client) setRoom(r *Room) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.room = r
 }
 
 // send to client/browser
@@ -42,7 +57,7 @@ func (c *Client) send() {
 	for p := range c.channel {
 		err := c.conn.WriteMessage(websocket.TextMessage, p)
 		if err != nil {
-			log.Printf("Error sending message to client <%s>: %v", c.id, err)
+			log.Printf("error sending message to client <%s>: %v", c.id, err)
 			c.ctxCancel()
 			return
 		}
@@ -56,30 +71,34 @@ func (c *Client) read() {
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading payload from client <%s>: %v", c.id, err)
+			log.Printf("error reading message: %v", err)
 			c.ctxCancel()
 			return
 		}
 
-		m, err := dto.ToMessageIn(p)
+		m, err := messagein.ToMessageIn(p)
 		if err != nil {
-			log.Printf("Error parsing payload from client <%s>: <%v>", c.id, err)
+			log.Printf("error parsing message in: %v", err)
 			continue
 		}
 
-		switch m.Mode {
-		case "chat":
-			c.handleChat(m)
-		case "restore":
-			c.handleRestore(m)
-		case "leave":
-			c.handleLeave()
-		case "join":
-			c.handleJoin(m)
-		case "typing":
-			c.handleTyping(m)
-		case "not_typing":
-			c.handleNotTyping(m)
+		switch v := m.(type) {
+		case *messagein.MessageInChat:
+			c.handleChat(v)
+		case *messagein.MessageInRestore:
+			c.handleRestore(v)
+		case *messagein.MessageInJoin:
+			c.handleJoin(v)
+
+		case *messagein.MessageInEvent:
+			switch v.Mode {
+			case "leave":
+				c.handleLeave()
+			case "typing":
+				c.handleTyping()
+			case "not_typing":
+				c.handleNotTyping()
+			}
 		}
 	}
 }

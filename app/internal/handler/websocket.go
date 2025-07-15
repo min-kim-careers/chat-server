@@ -23,7 +23,7 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Error upgrading connection: %v", err)
+		log.Printf("error upgrading connection: %v", err)
 		conn.Close()
 		return
 	}

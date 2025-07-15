@@ -1,10 +1,12 @@
 package chat
 
 import (
-	"chat-server/internal/dto"
+	"chat-server/internal/dto/messageout"
 	"chat-server/internal/helper"
 	"context"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -18,13 +20,15 @@ type Room struct {
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
 	pubsub           *redis.PubSub
+	lastActivity     time.Time
+	mu               sync.Mutex
 }
 
 func NewRoom(hub *Hub, id string) *Room {
 	ctx, cancel := context.WithCancel(context.Background())
 	pubsub := hub.svc.Room.GetRoomChannel(ctx, id)
 	if pubsub == nil {
-		log.Printf("Room <%s> failed to subscribe to a channel. Disconnecting.", id)
+		log.Printf("room <%s> failed to get pubsub. closing..", id)
 		cancel()
 		return nil
 	}
@@ -36,37 +40,55 @@ func NewRoom(hub *Hub, id string) *Room {
 		clientUnregister: make(chan *Client),
 		ctx:              ctx,
 		ctxCancel:        cancel,
+		lastActivity:     time.Now(),
 		pubsub:           pubsub,
 	}
 	r.run()
 	return r
 }
 
+func (r *Room) getCacheSize() int64 {
+	return r.hub.svc.Message.GetCachedChatMessagesSize(r.ctx, r.id)
+}
+
+func (r *Room) touch() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lastActivity = time.Now()
+}
+
 func (r *Room) registerClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.clients[c.id] = c
 	c.room = r
 	log.Printf("Client <%s> joined room <%s>.", c.id, r.id)
-	p, err := dto.ToRawMessageOut(&dto.MessageOut{
+	p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 		Mode: "joined",
 	})
 	if err != nil {
-		log.Printf("Error parsing joined message: %v", err)
+		log.Printf("error parsing joined message: %v", err)
 		return
 	}
 	c.channel <- p
 }
 
 func (r *Room) unregisterClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if _, exists := r.clients[c.id]; exists {
 		delete(r.clients, c.id)
 		c.room = nil
 		log.Printf("Client <%s> left room <%s>.", c.id, r.id)
 		if c.channel != nil {
-			p, err := dto.ToRawMessageOut(&dto.MessageOut{
+			p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 				Mode: "left",
 			})
 			if err != nil {
-				log.Printf("Error parsing left message: %v", err)
+				log.Printf("error parsing left message: %v", err)
 				return
 			}
 			c.channel <- p
@@ -104,8 +126,9 @@ func (r *Room) handleClients() {
 	defer r.pubsub.Close()
 
 	for data := range r.pubsub.Channel() {
+		r.touch()
 		p := []byte(data.Payload)
-		clientID := helper.GetSingleField(p, "clientId")
+		clientID := helper.GetFieldValue(p, "clientId")
 		for _, c := range r.clients {
 			if c.id == string(clientID) {
 				continue
@@ -124,6 +147,10 @@ func (r *Room) handleClose() {
 	r.clientRegister = nil
 	close(r.clientUnregister)
 	r.clientUnregister = nil
+}
+
+func (r *Room) flushRoom() {
+	// set key expiry after flushing
 }
 
 func (r *Room) run() {

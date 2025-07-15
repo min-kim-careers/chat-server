@@ -6,10 +6,10 @@ import (
 	"github.com/buger/jsonparser"
 )
 
-func GetSingleField(p []byte, field ...string) []byte {
+func GetFieldValue(p []byte, field ...string) []byte {
 	val, _, _, err := jsonparser.Get(p, field...)
 	if err != nil {
-		log.Printf("Error getting single field: %v", err)
+		log.Printf("error getting single field: %v", err)
 		return nil
 	}
 	return val
