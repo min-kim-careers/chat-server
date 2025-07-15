@@ -1,7 +1,7 @@
 package api
 
 import (
-	"chat-server/internal/dto"
+	"chat-server/internal/helper"
 	"chat-server/internal/service"
 	"log"
 	"net/http"
@@ -76,7 +76,7 @@ func getRoomsByClient(c *gin.Context, s *service.Services) {
 
 func deleteRoomById(c *gin.Context, s *service.Services) {
 	roomSlug := c.Param("roomSlug")
-	roomID := dto.RoomSlugToID(roomSlug)
+	roomID := helper.RoomSlugToID(roomSlug)
 	if roomID == nil {
 		c.JSON(http.StatusBadRequest, APIError{Message: "invalid room id"})
 		return

@@ -2,11 +2,11 @@ package service
 
 import (
 	"chat-server/internal/cache"
+	"chat-server/internal/dto/messageout"
 	"chat-server/internal/helper"
 
 	"chat-server/internal/db"
 	"chat-server/internal/db/gen"
-	"chat-server/internal/dto"
 	"chat-server/internal/repo"
 	"context"
 	"errors"
@@ -31,7 +31,7 @@ func NewMessageService(r *repo.MessageRepo, db *db.DB, c *cache.Cache) *MessageS
 	}
 }
 
-func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*dto.MessageOutChat, error) {
+func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*messageout.MessageOutChat, error) {
 	if roomID == uuid.Nil || createdAt.IsZero() || limit < 1 {
 		return nil, errors.New("invalid params")
 	}
@@ -45,9 +45,9 @@ func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, cr
 		return nil, err
 	}
 
-	dtos := make([]*dto.MessageOutChat, len(rows))
+	dtos := make([]*messageout.MessageOutChat, len(rows))
 	for i, r := range rows {
-		dtos[len(dtos)-1-i] = messageDBToDTO(r, clientID)
+		dtos[len(dtos)-1-i] = dbToMessageOut(r, clientID)
 	}
 
 	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), roomID)
@@ -55,7 +55,8 @@ func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, cr
 }
 
 func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, roomID string, clientID string, cacheSize int64) error {
-	rows := s.c.Range(ctx, roomKey(roomID), cacheSize)
+	// rows := s.c.Range(ctx, roomMsgKey(roomID), cacheSize)
+	rows := []string{}
 	if len(rows) == 0 {
 		return nil
 	}
@@ -64,7 +65,7 @@ func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, roomID str
 	for i, r := range rows {
 		c, err := cache.ToMessageCache(r)
 		if err != nil {
-			log.Printf("Error parsing cache rows")
+			log.Printf("error parsing cache rows")
 			return err
 		}
 		cached[i] = gen.BulkInsertMessagesParams{

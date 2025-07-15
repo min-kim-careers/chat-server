@@ -3,7 +3,8 @@ package service
 import (
 	"chat-server/internal/cache"
 	"chat-server/internal/db/gen"
-	"chat-server/internal/dto"
+	"chat-server/internal/dto/messageout"
+	"chat-server/internal/dto/roomout"
 	"chat-server/internal/helper"
 
 	"github.com/google/uuid"
@@ -16,8 +17,8 @@ func sortClientIds(client1 uuid.UUID, client2 uuid.UUID) (uuid.UUID, uuid.UUID) 
 	return client1, client2
 }
 
-func roomDBToDTO(r gen.Room) *dto.RoomOut {
-	return &dto.RoomOut{
+func dbToRoomOut(r gen.Room) *roomout.RoomOut {
+	return &roomout.RoomOut{
 		ID:        helper.EncodeSlug(r.ID.Bytes[:]),
 		ItemID:    r.ItemID,
 		CreatedAt: r.CreatedAt.Time,
@@ -25,8 +26,8 @@ func roomDBToDTO(r gen.Room) *dto.RoomOut {
 	}
 }
 
-func messageDBToDTO(m gen.Message, clientID string) *dto.MessageOutChat {
-	return &dto.MessageOutChat{
+func dbToMessageOut(m gen.Message, clientID string) *messageout.MessageOutChat {
+	return &messageout.MessageOutChat{
 		Mode:      "chat",
 		ID:        *helper.ToDTOUUID(m.ID),
 		CreatedAt: m.CreatedAt.Time,
@@ -36,17 +37,19 @@ func messageDBToDTO(m gen.Message, clientID string) *dto.MessageOutChat {
 	}
 }
 
-func messageCacheToDTO(p string, clientID string) (*dto.MessageOutChat, error) {
+func cacheToMessageOut(p string, clientID string) (*messageout.MessageOutChat, error) {
 	c, err := cache.ToMessageCache(p)
 	if err != nil {
 		return nil, err
 	}
-	return &dto.MessageOutChat{
-		Mode:      "chat",
+	m := &messageout.MessageOutChat{
+		Mode:      c.Mode,
 		ID:        c.ID,
 		CreatedAt: c.CreatedAt,
-		Read:      c.Read,
 		Content:   c.Content,
 		IsMine:    c.ClientID == clientID,
-	}, nil
+		Read:      c.Read,
+		Sent:      c.Sent,
+	}
+	return m, nil
 }

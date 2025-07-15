@@ -75,7 +75,7 @@ func initDBPool(ctx context.Context) *pgxpool.Pool {
 
 	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
-		log.Fatal("Error while creating a DB pool:", err)
+		log.Fatal("error while creating a DB pool:", err)
 	}
 
 	return dbPool

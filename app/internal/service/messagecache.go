@@ -2,74 +2,124 @@ package service
 
 import (
 	"chat-server/internal/cache"
-	"chat-server/internal/constant"
-	"chat-server/internal/dto"
+	"chat-server/internal/dto/messageout"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
-func (s *MessageService) PublishChatMessage(ctx context.Context, roomID string, m *dto.MessageIn) bool {
-	p, err := dto.ToRawMessageOut(m)
+type CacheChatMessageParams struct {
+	ClientID string
+	RoomID   string
+	Content  string
+}
+
+func (s *MessageService) CacheChatMessage(ctx context.Context, arg CacheChatMessageParams) (*cache.MessageCache, error) {
+	newID, err := uuid.NewUUID()
 	if err != nil {
-		log.Printf("%v", err)
-		return false
+		return nil, err
 	}
-	return s.c.Publish(ctx, roomKey(roomID), p)
-}
-
-func (s *MessageService) CacheChatMessage(ctx context.Context, roomID string, m *dto.MessageIn) bool {
-	if m.RoomID == nil {
-		return false
-	}
-
-	id, err := uuid.NewUUID()
+	_roomID, err := uuid.Parse(arg.RoomID)
 	if err != nil {
-		log.Println(err)
-		return false
+		return nil, err
 	}
 
-	p, err := json.Marshal(cache.Message{
-		ID:        id,
-		Mode:      m.Mode,
-		RoomID:    *m.RoomID,
-		ClientID:  m.ClientID,
-		CreatedAt: m.CreatedAt,
-		Read:      m.Read,
-		Content:   m.Content,
-	})
+	t := time.Now()
+
+	c := &cache.MessageCache{
+		ID:        newID,
+		Mode:      "chat",
+		RoomID:    _roomID,
+		ClientID:  arg.ClientID,
+		Content:   arg.Content,
+		CreatedAt: t,
+		Read:      false,
+		Sent:      true,
+	}
+	p, err := json.Marshal(c)
 	if err != nil {
-		log.Println(err)
-		return false
+		return nil, err
 	}
-	return s.c.Add(ctx, roomKey(roomID), p)
+	err = s.c.Client.ZAdd(ctx, msgKey(arg.RoomID), redis.Z{
+		Score:  float64(t.UnixNano()),
+		Member: p,
+	}).Err()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println("Cached:", c)
+	return c, nil
 }
 
-func (s *MessageService) GetCacheSize(ctx context.Context, roomID string) int64 {
-	return s.c.Size(ctx, roomKey(roomID), constant.CACHE_LIMIT)
+type PublishMessageParams struct {
+	Mode     string
+	ClientID string
+	RoomID   string
+	Content  string
 }
 
-func (s *MessageService) ClearChatMessageCache(ctx context.Context, roomID string) {
-	s.c.Clear(ctx, roomKey(roomID))
+func (s *MessageService) PublishMessage(ctx context.Context, roomID string, m messageout.MessageOut) error {
+	p, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	err = s.c.Client.Publish(ctx, msgKey(roomID), p).Err()
+	if err != nil {
+		return err
+	}
+
+	log.Println("Published:", string(p))
+	return nil
 }
 
-func (s *MessageService) GetCachedChatMessages(ctx context.Context, key string, clientID string) ([]*dto.MessageOutChat, error) {
-	rows := s.c.Range(ctx, roomKey(key), constant.CACHE_LIMIT)
+type GetCachedChatMessagesParams struct {
+	ClientID string
+	RoomID   string
+	Before   time.Time
+	Limit    int64
+}
+
+func (s *MessageService) GetCachedMessages(
+	ctx context.Context,
+	arg GetCachedChatMessagesParams,
+
+) ([]*messageout.MessageOutChat, error) {
+	rows, err := s.c.Client.ZRevRangeByScore(ctx, msgKey(arg.RoomID), &redis.ZRangeBy{
+		Max:   fmt.Sprintf("(%d", arg.Before.UnixNano()),
+		Min:   "-inf",
+		Count: arg.Limit,
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+
 	if len(rows) == 0 {
-		return []*dto.MessageOutChat{}, nil
+		return []*messageout.MessageOutChat{}, nil
 	}
 
-	dtos := make([]*dto.MessageOutChat, len(rows))
+	dtos := make([]*messageout.MessageOutChat, len(rows))
 	for i, r := range rows {
-		dto, err := messageCacheToDTO(r, clientID)
+		dto, err := cacheToMessageOut(r, arg.ClientID)
 		if err != nil {
 			return nil, err
 		}
-		dtos[len(dtos)-1-i] = dto
+		dtos[i] = dto
 	}
 
-	log.Printf("Fetched %d from cache from key <%s>.", len(dtos), key)
 	return dtos, nil
+}
+
+func (s *MessageService) GetCachedChatMessagesSize(ctx context.Context, roomID string) int64 {
+	card, err := s.c.Client.ZCard(ctx, msgKey(roomID)).Result()
+	if err != nil {
+		log.Println("error getting cache size:", err)
+		return -1
+	}
+	return card
 }

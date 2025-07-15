@@ -1,7 +1,6 @@
 package constant
 
-var ChatModes = map[string]string{
-	// Flags
+var ChatModeEvents = map[string]string{
 	"connected":  "connected",
 	"restored":   "restored",
 	"joined":     "joined",
@@ -9,11 +8,6 @@ var ChatModes = map[string]string{
 	"empty":      "empty",
 	"typing":     "typing",
 	"not_typing": "not_typing",
-
-	// Actions
-	"chat":       "chat",
-	"restore":    "restore", // Requires createdAt
-	"join":       "join",    // Requires roomID
 	"leave":      "leave",
 	"disconnect": "disconnect",
 }

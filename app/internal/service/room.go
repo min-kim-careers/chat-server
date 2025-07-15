@@ -4,7 +4,7 @@ import (
 	"chat-server/internal/cache"
 	"chat-server/internal/db"
 	"chat-server/internal/db/gen"
-	"chat-server/internal/dto"
+	"chat-server/internal/dto/roomout"
 	"chat-server/internal/helper"
 	"chat-server/internal/repo"
 	"context"
@@ -30,7 +30,7 @@ func NewRoomService(r *repo.RoomRepo, db *db.DB, c *cache.Cache) *RoomService {
 	}
 }
 
-func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*dto.RoomOut, error) {
+func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 uuid.UUID, client2 uuid.UUID) (*roomout.RoomOut, error) {
 	if itemID == "" || client1 == uuid.Nil || client2 == uuid.Nil || client1 == client2 {
 		return nil, errors.New("invalid params")
 	}
@@ -52,7 +52,7 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		if err := tx.Commit(ctx); err != nil {
 			return nil, err
 		}
-		dto := roomDBToDTO(row)
+		dto := dbToRoomOut(row)
 		log.Printf("Existing room found: <%s>", dto.ID)
 		return dto, nil
 	}
@@ -73,13 +73,13 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		return nil, err
 	}
 
-	dto := roomDBToDTO(row)
+	dto := dbToRoomOut(row)
 
 	log.Printf("Registered room ID: <%s>", dto.ID)
 	return dto, nil
 }
 
-func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID, clientID uuid.UUID) (*dto.RoomOut, error) {
+func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID, clientID uuid.UUID) (*roomout.RoomOut, error) {
 	row, err := s.r.GetRoomByIdAndClient(ctx, gen.GetRoomByIdAndClientParams{
 		ID:       helper.ToDBUUID(roomID),
 		ClientID: helper.ToDBUUID(clientID),
@@ -87,29 +87,29 @@ func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID
 	if err != nil {
 		return nil, err
 	}
-	dto := roomDBToDTO(row)
+	dto := dbToRoomOut(row)
 	return dto, nil
 }
 
-func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID) ([]*dto.RoomOut, error) {
+func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID) ([]*roomout.RoomOut, error) {
 	rows, err := s.r.GetAllRoomsByClient(ctx, helper.ToDBUUID(roomID))
 	if err != nil {
 		return nil, err
 	}
-	dtos := make([]*dto.RoomOut, len(rows))
+	dtos := make([]*roomout.RoomOut, len(rows))
 	for i, r := range rows {
-		dtos[i] = roomDBToDTO(r)
+		dtos[i] = dbToRoomOut(r)
 	}
 	return dtos, nil
 }
 
-func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*dto.RoomOut, error) {
+func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*roomout.RoomOut, error) {
 	room, err := s.r.GetRoomById(ctx, helper.ToDBUUID(roomID))
 	if err != nil {
 		return nil, err
 	}
 
-	return roomDBToDTO(room), nil
+	return dbToRoomOut(room), nil
 }
 
 func (s *RoomService) DeleteRoomById(ctx context.Context, roomID uuid.UUID) error {
