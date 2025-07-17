@@ -3,8 +3,8 @@ package main
 import (
 	"chat-server/internal/api"
 	"chat-server/internal/chat"
-	"chat-server/internal/handler"
 	"chat-server/internal/service"
+	"chat-server/internal/websocket"
 	"flag"
 	"log"
 	"net/http"
@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile)
 
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
@@ -46,7 +47,7 @@ func main() {
 
 	// WS server
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		handler.WebsocketHandler(w, r, hub)
+		websocket.WebsocketHandler(w, r, hub)
 	})
 	log.Println("Chat WS server running on", *wsAddr)
 	if err := http.ListenAndServe(*wsAddr, nil); err != nil {

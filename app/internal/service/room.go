@@ -37,6 +37,7 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 
 	tx, err := s.db.DBPool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
@@ -66,6 +67,7 @@ func (s *RoomService) RegisterRoom(ctx context.Context, itemID string, client1 u
 		Client2: helper.ToDBUUID(client2),
 	})
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
@@ -85,6 +87,7 @@ func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID
 		ClientID: helper.ToDBUUID(clientID),
 	})
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 	dto := dbToRoomOut(row)
@@ -94,6 +97,7 @@ func (s *RoomService) GetRoomByIdAndClient(ctx context.Context, roomID uuid.UUID
 func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID) ([]*roomout.RoomOut, error) {
 	rows, err := s.r.GetAllRoomsByClient(ctx, helper.ToDBUUID(roomID))
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 	dtos := make([]*roomout.RoomOut, len(rows))
@@ -106,6 +110,7 @@ func (s *RoomService) GetAllRoomsByClient(ctx context.Context, roomID uuid.UUID)
 func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*roomout.RoomOut, error) {
 	room, err := s.r.GetRoomById(ctx, helper.ToDBUUID(roomID))
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
@@ -115,6 +120,7 @@ func (s *RoomService) GetRoomById(ctx context.Context, roomID uuid.UUID) (*roomo
 func (s *RoomService) DeleteRoomById(ctx context.Context, roomID uuid.UUID) error {
 	err := s.r.DeleteRoomById(ctx, helper.ToDBUUID(roomID))
 	if err != nil {
+		log.Println("error:", err)
 		return err
 	}
 

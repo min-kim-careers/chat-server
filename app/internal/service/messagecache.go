@@ -2,10 +2,13 @@ package service
 
 import (
 	"chat-server/internal/cache"
+	"chat-server/internal/constants"
 	"chat-server/internal/dto/messageout"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -33,6 +36,7 @@ func (s *MessageService) PersistChatMessage(ctx context.Context, v map[string]an
 func (s *MessageService) CacheAndPersistChatMessage(ctx context.Context, arg CacheChatMessageParams) (*cache.CacheMessage, error) {
 	m, err := cache.NewCacheMessage(arg.RoomID, arg.ClientID, arg.Content)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
@@ -40,16 +44,16 @@ func (s *MessageService) CacheAndPersistChatMessage(ctx context.Context, arg Cac
 
 	err = s.CacheChatMessage(ctx, cache.CacheStreamKey(arg.RoomID), v)
 	if err != nil {
-		log.Println("error caching:", err)
+		log.Println("error:", err)
 	} else {
-		log.Println("Cached")
+		log.Println("cached")
 	}
 
 	err = s.PersistChatMessage(ctx, v)
 	if err != nil {
-		log.Println("error persisting:", err)
+		log.Println("error:", err)
 	} else {
-		log.Println("Persisted")
+		log.Println("persisted")
 	}
 
 	log.Println(m)
@@ -66,14 +70,16 @@ type PublishMessageParams struct {
 func (s *MessageService) PublishMessage(ctx context.Context, roomID string, m messageout.MessageOut) error {
 	p, err := json.Marshal(m)
 	if err != nil {
+		log.Println("error:", err)
 		return err
 	}
 	err = s.c.Client.Publish(ctx, cache.CacheStreamKey(roomID), p).Err()
 	if err != nil {
+		log.Println("error:", err)
 		return err
 	}
 
-	log.Println("Published:", string(p))
+	log.Println("published:", string(p))
 	return nil
 }
 
@@ -89,12 +95,9 @@ func (s *MessageService) GetCachedChatMessages(
 	arg GetCachedChatMessagesParams,
 
 ) ([]*messageout.MessageOutChat, *string, error) {
-	msgs, err := s.c.Client.XRead(ctx, &redis.XReadArgs{
-		Streams: []string{cache.CacheStreamKey(arg.RoomID), arg.LastCacheID},
-		Count:   arg.Limit,
-		Block:   0,
-	}).Result()
+	msgs, err := s.c.Client.XRangeN(ctx, cache.CacheStreamKey(arg.RoomID), fmt.Sprintf("(%s", arg.LastCacheID), "+", constants.RESTORE_LIMIT).Result()
 	if err != nil {
+		log.Println("error:", err)
 		return nil, nil, err
 	}
 
@@ -104,30 +107,40 @@ func (s *MessageService) GetCachedChatMessages(
 
 	var lastCacheID string
 	dtos := make([]*messageout.MessageOutChat, len(msgs))
-	for i, m := range msgs[0].Messages {
+	for i, m := range msgs {
 		dto, err := cacheToMessageOutChat(m.Values, arg.ClientID)
 		if err != nil {
+			log.Println("error:", err)
 			return nil, nil, err
 		}
 		dtos[i] = dto
-		if i == len(msgs[0].Messages) {
-			lastCacheID = m.ID
-		}
+		lastCacheID = m.ID
 	}
 
+	log.Printf("fetched %d from cache", len(dtos))
 	return dtos, &lastCacheID, nil
 }
 
-func (s *MessageService) GetChatMessagePersistStream(ctx context.Context, workerID string, roomID string) ([]redis.XStream, error) {
-	msgs, err := s.c.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
+func (s *MessageService) GetCacheMessageStream(ctx context.Context, count int64, block time.Duration) ([]redis.XStream, error) {
+	res, err := s.c.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    cache.PersistGroupKey(),
-		Consumer: workerID,
-		Streams:  []string{cache.CacheStreamKey(roomID), ">"},
-		Count:    10,
-		Block:    0,
+		Consumer: "persist_reader",
+		Streams:  []string{cache.PersistStreamKey(), ">"},
+		Count:    count,
+		Block:    block,
 	}).Result()
-	if err != nil {
-		return []redis.XStream{}, err
+	if err != nil && err != redis.Nil {
+		log.Println("error:", err)
+		time.Sleep(time.Second)
+		return nil, err
 	}
-	return msgs, nil
+	return res, nil
+}
+
+func (s *MessageService) MarkCacheBatchAsPersisted(ctx context.Context, msgIDs []string) error {
+	return s.c.Client.XAck(ctx, cache.PersistStreamKey(), cache.PersistGroupKey(), msgIDs...).Err()
+}
+
+func (s *MessageService) GetPendingCacheMesages(ctx context.Context) (*redis.XPending, error) {
+	return s.c.Client.XPending(ctx, cache.PersistStreamKey(), cache.PersistGroupKey()).Result()
 }

@@ -2,7 +2,7 @@ package chat
 
 import (
 	"chat-server/internal/auth"
-	"chat-server/internal/constant"
+	"chat-server/internal/constants"
 	"chat-server/internal/dto/messagein"
 	"chat-server/internal/dto/messageout"
 	"chat-server/internal/service"
@@ -24,7 +24,7 @@ func (c *Client) handleChat(m *messagein.MessageInChat) {
 		Content:  m.Content,
 	})
 	if err != nil {
-		log.Printf("error caching chat: %v", err)
+		log.Println("error:", err)
 		return
 	}
 
@@ -39,7 +39,7 @@ func (c *Client) handleChat(m *messagein.MessageInChat) {
 		Sent:      true,
 	})
 	if err != nil {
-		log.Printf("error publish chat: %v", err)
+		log.Println("error:", err)
 	}
 }
 
@@ -60,7 +60,7 @@ func (c *Client) handleJoin(m *messagein.MessageInJoin) {
 
 	err := auth.IsAuthorised(c.ctx, c.hub.svc.Room, c.id, *m.RoomID)
 	if err != nil {
-		log.Printf("Unauthorised user <%s>: %v", c.id, err)
+		log.Println("error:", err)
 		return
 	}
 
@@ -78,13 +78,10 @@ func (c *Client) handleJoin(m *messagein.MessageInJoin) {
 }
 
 func (c *Client) handleLeave() {
-	if !c.hasRoom() {
-		return
-	}
-
 	if c.hasRoom() {
 		c.room.clientUnregister <- c
 		c.setRoom(nil)
+		c.resetCursor()
 	}
 }
 
@@ -96,13 +93,13 @@ func (c *Client) handleNotTyping() {
 	msgSvc := c.hub.svc.Message
 
 	if err := msgSvc.PublishMessage(c.ctx, c.room.id, &messageout.MessageOutEvent{Mode: "not_typing"}); err != nil {
-		log.Println("error sending typing message:", err)
+		log.Println("error:", err)
 		return
 	}
 }
 
 func (c *Client) handleRestore() {
-	if !c.hasRoom() {
+	if !c.hasRoom() || c.hasNoMessages() {
 		return
 	}
 
@@ -111,44 +108,53 @@ func (c *Client) handleRestore() {
 	cachedMsgs, lastCacheID, err := c.hub.svc.Message.GetCachedChatMessages(c.ctx, service.GetCachedChatMessagesParams{
 		ClientID:    c.id,
 		RoomID:      c.room.id,
-		Limit:       constant.RESTORE_LIMIT,
+		Limit:       constants.RESTORE_LIMIT,
 		LastCacheID: c.cursor.LastCacheID,
 	})
 	if err != nil {
-		log.Println("GetCachedChatMessages error:", err)
+		log.Println("error:", err)
 		return
 	}
+
 	if lastCacheID != nil {
 		c.cursor.LastCacheID = *lastCacheID
+		c.cursor.LastDBID = cachedMsgs[len(cachedMsgs)-1].CreatedAt
 	}
 
 	restoredMsgs = append(restoredMsgs, cachedMsgs...)
 
-	if len(restoredMsgs) != constant.RESTORE_LIMIT {
+	if len(restoredMsgs) != constants.RESTORE_LIMIT {
 		_roomID, err := uuid.Parse(c.room.id)
 		if err != nil {
-			log.Println("error parsing room ID:", err)
+			log.Println("error:", err)
 			return
 		}
-		if c.cursor.LastDBID.IsZero() {
+		if len(restoredMsgs) > 0 {
 			c.cursor.LastDBID = restoredMsgs[len(restoredMsgs)-1].CreatedAt
 		}
-		dbMsgs, err := c.hub.svc.Message.GetDBMessages(
+		dbMsgs, err := c.hub.svc.Message.GetChatMessagesFromDB(
 			c.ctx,
-
 			service.GetDBMessagesParams{
 				RoomID:    _roomID,
 				CreatedAt: c.cursor.LastDBID,
-				Limit:     constant.RESTORE_LIMIT - len(restoredMsgs),
+				Limit:     constants.RESTORE_LIMIT - len(restoredMsgs),
 				ClientID:  c.id,
 			},
 		)
 		if err != nil {
-			log.Println("GetDBMessages error:", err)
+			log.Println("error:", err)
 			return
 		}
 
 		restoredMsgs = append(restoredMsgs, dbMsgs...)
+
+		if len(restoredMsgs) > 0 {
+			c.cursor.LastDBID = restoredMsgs[len(restoredMsgs)-1].CreatedAt
+		}
+	}
+
+	if len(restoredMsgs) < constants.RESTORE_LIMIT {
+		c.cursor.NoMessages = true
 	}
 
 	p, err := messageout.ToRawMessageOut(&messageout.MessageOutRestored{
@@ -156,7 +162,7 @@ func (c *Client) handleRestore() {
 		Messages: restoredMsgs,
 	})
 	if err != nil {
-		log.Printf("error parsing restore message: %v", err)
+		log.Println("error:", err)
 		return
 	}
 	c.channel <- p
@@ -170,7 +176,20 @@ func (c *Client) handleTyping() {
 	msgSvc := c.hub.svc.Message
 
 	if err := msgSvc.PublishMessage(c.ctx, c.room.id, &messageout.MessageOutEvent{Mode: "typing"}); err != nil {
-		log.Println("error sending typing message:", err)
+		log.Println("error:", err)
+		return
+	}
+}
+
+func (c *Client) handleNoMessages() {
+	if !c.hasRoom() {
+		return
+	}
+
+	msgSvc := c.hub.svc.Message
+
+	if err := msgSvc.PublishMessage(c.ctx, c.room.id, &messageout.MessageOutEvent{Mode: "no_messages"}); err != nil {
+		log.Println("error:", err)
 		return
 	}
 }

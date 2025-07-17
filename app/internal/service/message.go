@@ -38,7 +38,7 @@ type GetDBMessagesParams struct {
 	ClientID  string
 }
 
-func (s *MessageService) GetDBMessages(ctx context.Context, arg GetDBMessagesParams) ([]*messageout.MessageOutChat, error) {
+func (s *MessageService) GetChatMessagesFromDB(ctx context.Context, arg GetDBMessagesParams) ([]*messageout.MessageOutChat, error) {
 	if arg.RoomID == uuid.Nil || arg.CreatedAt.IsZero() || arg.Limit < 1 {
 		return nil, errors.New("invalid params")
 	}
@@ -49,6 +49,7 @@ func (s *MessageService) GetDBMessages(ctx context.Context, arg GetDBMessagesPar
 		Limit:     int32(arg.Limit),
 	})
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
@@ -57,11 +58,11 @@ func (s *MessageService) GetDBMessages(ctx context.Context, arg GetDBMessagesPar
 		dtos[len(dtos)-1-i] = dbToMessageOutChat(r, arg.ClientID)
 	}
 
-	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), arg.RoomID)
+	log.Printf("fetched %d from db", len(dtos))
 	return dtos, nil
 }
 
-func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, cachedMsgs []cache.CacheMessage) error {
+func (s *MessageService) FlushCacheBatchMessagesToDB(ctx context.Context, cachedMsgs []cache.CacheMessage) error {
 	if len(cachedMsgs) == 0 {
 		return nil
 	}
@@ -80,12 +81,13 @@ func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, cachedMsgs
 
 	count, err := s.r.BulkInsertMessages(ctx, cached)
 	if err != nil {
+		log.Println("error:", err)
 		return err
 	}
 	if int(count) != len(cached) {
 		log.Printf("%d messages given but %d inserted", len(cached), count)
 	}
 
-	log.Printf("Persisted %d messages", count)
+	log.Printf("persisted %d messages", count)
 	return nil
 }

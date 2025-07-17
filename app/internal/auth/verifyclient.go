@@ -38,6 +38,7 @@ func verifyToken(idToken string) (*VerifyTokenResponse, bool) {
 
 	reqBody, err := json.Marshal(VerifyTokenRequest{IDToken: idToken})
 	if err != nil {
+		log.Println("error:", err)
 		return nil, false
 	}
 
@@ -48,6 +49,7 @@ func verifyToken(idToken string) (*VerifyTokenResponse, bool) {
 		body,
 	)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, false
 	}
 
@@ -55,7 +57,7 @@ func verifyToken(idToken string) (*VerifyTokenResponse, bool) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("Token verification error:", err)
+		log.Println("error:", err)
 		return nil, false
 	}
 	defer resp.Body.Close()

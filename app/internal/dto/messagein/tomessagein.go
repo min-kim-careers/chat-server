@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 )
 
 func ToMessageIn(p []byte) (MessageIn, error) {
@@ -15,6 +16,7 @@ func ToMessageIn(p []byte) (MessageIn, error) {
 
 	isEvent, err := validateMessageIn(&b)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 

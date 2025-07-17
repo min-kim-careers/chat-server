@@ -3,6 +3,7 @@ package messagein
 import (
 	"encoding/json"
 	"errors"
+	"log"
 )
 
 func ToRawMessageIn(m MessageIn) ([]byte, error) {
@@ -17,6 +18,7 @@ func ToRawMessageIn(m MessageIn) ([]byte, error) {
 
 	p, err := json.Marshal(m)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
