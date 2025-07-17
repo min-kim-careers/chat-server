@@ -19,7 +19,7 @@ func RegisterRoomRoutes(rg *gin.RouterGroup, s *service.Services) {
 		getRoomsByClient(c, s)
 	})
 
-	rg.DELETE("/rooms/:roomSlug", func(c *gin.Context) {
+	rg.DELETE("/rooms/roomSlug/:roomSlug", func(c *gin.Context) {
 		deleteRoomById(c, s)
 	})
 }
@@ -44,7 +44,7 @@ func registerRoom(c *gin.Context, s *service.Services) {
 
 	room, err := s.Room.RegisterRoom(c.Request.Context(), req.ItemID, req.ClientID, req.PeerID)
 	if err != nil {
-		log.Printf("Failed to register room for item <%s>: %v", req.ItemID, err)
+		log.Println("error:", err)
 		c.JSON(http.StatusInternalServerError, APIError{Message: "failed to register room"})
 		return
 	}
@@ -58,13 +58,14 @@ func getRoomsByClient(c *gin.Context, s *service.Services) {
 	clientID := c.Param("clientID")
 	_clientID, err := uuid.Parse(clientID)
 	if err != nil {
+		log.Println("error:", err)
 		c.JSON(http.StatusBadRequest, APIError{Message: "invalid client id"})
 		return
 	}
 
 	rooms, err := s.Room.GetAllRoomsByClient(c, _clientID)
 	if err != nil {
-		log.Printf("Failed to get all rooms for client <%s>: %v", _clientID, err)
+		log.Println("error:", err)
 		c.JSON(http.StatusInternalServerError, APIError{Message: "failed to get all rooms"})
 		return
 	}
@@ -84,7 +85,7 @@ func deleteRoomById(c *gin.Context, s *service.Services) {
 
 	err := s.Room.DeleteRoomById(c, *roomID)
 	if err != nil {
-		log.Printf("Failed to delete room <%s>: %v", roomID, err)
+		log.Println("error:", err)
 		c.JSON(http.StatusInternalServerError, APIError{Message: "failed to delete room by id"})
 		return
 	}

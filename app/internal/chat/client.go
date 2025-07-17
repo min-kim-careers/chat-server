@@ -4,7 +4,6 @@ import (
 	"chat-server/internal/dto/messagein"
 	"context"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -13,12 +12,14 @@ import (
 type RestoreCursor struct {
 	LastCacheID string
 	LastDBID    time.Time
+	NoMessages  bool
 }
 
 func DefaultRestoreCursor() RestoreCursor {
 	return RestoreCursor{
 		LastCacheID: "0",
-		LastDBID:    time.Time{},
+		LastDBID:    time.Now(),
+		NoMessages:  false,
 	}
 }
 
@@ -31,7 +32,6 @@ type Client struct {
 	conn      *websocket.Conn
 	channel   chan []byte
 	cursor    RestoreCursor
-	mu        sync.Mutex
 }
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
@@ -49,21 +49,19 @@ func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 	return c
 }
 
-func (c *Client) hasRoom() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *Client) resetCursor() {
+	c.cursor = DefaultRestoreCursor()
+}
 
-	if c.room == nil {
-		log.Printf("room not found")
-		return false
-	}
-	return true
+func (c *Client) hasNoMessages() bool {
+	return c.cursor.NoMessages
+}
+
+func (c *Client) hasRoom() bool {
+	return c.room != nil
 }
 
 func (c *Client) setRoom(r *Room) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.room = r
 }
 
@@ -72,11 +70,12 @@ func (c *Client) send() {
 	for p := range c.channel {
 		err := c.conn.WriteMessage(websocket.TextMessage, p)
 		if err != nil {
+			log.Println("error:", err)
 			log.Printf("error sending message to client <%s>: %v", c.id, err)
 			c.ctxCancel()
 			return
 		}
-		log.Printf("Sent message to client <%s>: %v", c.id, string(p))
+		log.Printf("sent to client <%s>: %v", c.id, string(p))
 	}
 
 }
@@ -86,6 +85,7 @@ func (c *Client) read() {
 	for {
 		_, p, err := c.conn.ReadMessage()
 		if err != nil {
+			log.Println("error:", err)
 			log.Printf("error reading message: %v", err)
 			c.ctxCancel()
 			return
@@ -93,6 +93,7 @@ func (c *Client) read() {
 
 		m, err := messagein.ToMessageIn(p)
 		if err != nil {
+			log.Println("error:", err)
 			log.Printf("error parsing message in: %v", err)
 			continue
 		}
@@ -106,7 +107,11 @@ func (c *Client) read() {
 		case *messagein.MessageInEvent:
 			switch v.Mode {
 			case "restore":
-				c.handleRestore()
+				if c.hasNoMessages() {
+					c.handleNoMessages()
+				} else {
+					c.handleRestore()
+				}
 			case "leave":
 				c.handleLeave()
 			case "typing":

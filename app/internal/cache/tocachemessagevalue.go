@@ -5,7 +5,7 @@ func ToCacheMessageValue(m *CacheMessage) map[string]any {
 		"id":        m.ID.String(),
 		"roomId":    m.RoomID.String(),
 		"clientId":  m.ClientID,
-		"createdAt": m.Content,
-		"content":   m.CreatedAt,
+		"createdAt": m.CreatedAt,
+		"content":   m.Content,
 	}
 }

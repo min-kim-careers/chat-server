@@ -23,7 +23,7 @@ FROM
       messages
     WHERE
       room_id = $1
-      AND created_at < $2
+      AND created_at > $2
     ORDER BY
       created_at DESC
     LIMIT

@@ -13,13 +13,13 @@ func RoomSlugToID(roomSlug string) *uuid.UUID {
 
 	roomID, err := DecodeSlug(roomSlug)
 	if err != nil {
-		log.Printf("error decoding room slug: %s", roomSlug)
+		log.Println("error:", err)
 		return nil
 	}
 
 	_roomID, err := uuid.FromBytes(roomID)
 	if err != nil {
-		log.Printf("error parsing room slug to UUID")
+		log.Println("error:", err)
 		return nil
 	}
 

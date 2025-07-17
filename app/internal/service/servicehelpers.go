@@ -7,6 +7,7 @@ import (
 	"chat-server/internal/dto/roomout"
 	"chat-server/internal/helper"
 	"encoding/json"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -41,12 +42,14 @@ func dbToMessageOutChat(m gen.Message, clientID string) *messageout.MessageOutCh
 func cacheToMessageOutChat(s map[string]any, clientID string) (*messageout.MessageOutChat, error) {
 	p, err := json.Marshal(s)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 
 	var c *cache.CacheMessage
 	err = json.Unmarshal(p, &c)
 	if err != nil {
+		log.Println("error:", err)
 		return nil, err
 	}
 

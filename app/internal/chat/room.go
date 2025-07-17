@@ -2,7 +2,6 @@ package chat
 
 import (
 	"chat-server/internal/dto/messageout"
-	"chat-server/internal/helper"
 	"context"
 	"log"
 	"sync"
@@ -47,6 +46,20 @@ func NewRoom(hub *Hub, id string) *Room {
 	return r
 }
 
+func (r *Room) setClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.clients[c.id] = c
+}
+
+func (r *Room) deleteClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	delete(r.clients, c.id)
+}
+
 func (r *Room) touch() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -55,35 +68,29 @@ func (r *Room) touch() {
 }
 
 func (r *Room) registerClient(c *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.clients[c.id] = c
-	c.room = r
-	log.Printf("Client <%s> joined room <%s>.", c.id, r.id)
+	r.setClient(c)
+	c.setRoom(r)
+	log.Printf("client <%s> joined room <%s>.", c.id, r.id)
 	p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 		Mode: "joined",
 	})
 	if err != nil {
-		log.Printf("error parsing joined message: %v", err)
+		log.Println("error:", err)
 		return
 	}
 	c.channel <- p
 }
 
 func (r *Room) unregisterClient(c *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if _, exists := r.clients[c.id]; exists {
-		delete(r.clients, c.id)
-		log.Printf("Client <%s> left room <%s>.", c.id, r.id)
+		r.deleteClient(c)
+		log.Printf("client <%s> left room <%s>.", c.id, r.id)
 		if c.channel != nil {
 			p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 				Mode: "left",
 			})
 			if err != nil {
-				log.Printf("error parsing left message: %v", err)
+				log.Println("error:", err)
 				return
 			}
 			c.channel <- p
@@ -123,11 +130,11 @@ func (r *Room) handleClients() {
 	for data := range r.pubsub.Channel() {
 		r.touch()
 		p := []byte(data.Payload)
-		clientID := helper.GetFieldValue(p, "clientId")
+		// clientID := helper.GetFieldValue(p, "clientId")
 		for _, c := range r.clients {
-			if c.id == string(clientID) {
-				continue
-			}
+			// if c.id == string(clientID) {
+			// 	continue
+			// }
 			c.channel <- p
 		}
 	}

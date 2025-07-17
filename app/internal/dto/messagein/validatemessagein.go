@@ -1,14 +1,14 @@
 package messagein
 
 import (
-	"chat-server/internal/constant"
+	"chat-server/internal/constants"
 	"fmt"
 )
 
 func validateMessageIn(m *MessageInBase) (bool, error) {
-	_, isEvent := constant.ChatModeEvents[m.Mode]
+	_, isEvent := constants.ChatModeEvents[m.Mode]
 
-	_, isAction := constant.ChatModeActions[m.Mode]
+	_, isAction := constants.ChatModeActions[m.Mode]
 
 	validMode := isEvent || isAction
 	if !validMode {

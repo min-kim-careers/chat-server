@@ -1,4 +1,4 @@
-package handler
+package websocket
 
 import (
 	"chat-server/internal/auth"
@@ -23,7 +23,7 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request, hub *chat.Hub) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("error upgrading connection: %v", err)
+		log.Println("error:", err)
 		conn.Close()
 		return
 	}
