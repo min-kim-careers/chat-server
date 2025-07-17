@@ -47,5 +47,11 @@ func initCacheClient(ctx context.Context) *redis.Client {
 	}
 	log.Println("Connected to cache server.")
 
+	createPersistStreamGroup(client, ctx)
+
 	return client
+}
+
+func createPersistStreamGroup(c *redis.Client, ctx context.Context) {
+	c.XGroupCreateMkStream(ctx, PersistStreamKey(), PersistGroupKey(), "$")
 }

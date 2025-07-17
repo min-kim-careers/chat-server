@@ -5,9 +5,22 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+type RestoreCursor struct {
+	LastCacheID string
+	LastDBID    time.Time
+}
+
+func DefaultRestoreCursor() RestoreCursor {
+	return RestoreCursor{
+		LastCacheID: "0",
+		LastDBID:    time.Time{},
+	}
+}
 
 type Client struct {
 	hub       *Hub
@@ -17,6 +30,7 @@ type Client struct {
 	ctxCancel context.CancelFunc
 	conn      *websocket.Conn
 	channel   chan []byte
+	cursor    RestoreCursor
 	mu        sync.Mutex
 }
 
@@ -28,6 +42,7 @@ func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 		ctx:       ctx,
 		ctxCancel: cancel,
 		conn:      conn,
+		cursor:    DefaultRestoreCursor(),
 		channel:   make(chan []byte),
 	}
 	c.run()
@@ -85,13 +100,13 @@ func (c *Client) read() {
 		switch v := m.(type) {
 		case *messagein.MessageInChat:
 			c.handleChat(v)
-		case *messagein.MessageInRestore:
-			c.handleRestore(v)
 		case *messagein.MessageInJoin:
 			c.handleJoin(v)
 
 		case *messagein.MessageInEvent:
 			switch v.Mode {
+			case "restore":
+				c.handleRestore()
 			case "leave":
 				c.handleLeave()
 			case "typing":

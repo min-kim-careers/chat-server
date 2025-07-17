@@ -47,16 +47,6 @@ func ToMessageIn(p []byte) (MessageIn, error) {
 		j.RoomID = roomID
 		return &j, nil
 
-	case "restore":
-		var r MessageInRestore
-
-		if err := json.Unmarshal(p, &r); err != nil {
-			return nil, err
-		}
-		if r.CreatedAt.IsZero() {
-			return nil, errors.New("restore missing createdAt")
-		}
-		return &r, nil
 	}
 
 	return nil, fmt.Errorf("unknown type %s", b.Mode)

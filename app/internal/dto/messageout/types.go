@@ -6,6 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type MessageOut interface {
+	isMessageOut()
+}
+
+type MessageOutBase struct {
+	Mode string `json:"mode"`
+}
+
+func (*MessageOutBase) isMessageOut() {}
+
 type MessageOutChat struct {
 	Mode      string    `json:"mode"`
 	TempID    *string   `json:"tempId,omitempty"`
@@ -18,3 +28,16 @@ type MessageOutChat struct {
 }
 
 func (*MessageOutChat) isMessageOut() {}
+
+type MessageOutEvent struct {
+	Mode string `json:"mode"`
+}
+
+func (*MessageOutEvent) isMessageOut() {}
+
+type MessageOutRestored struct {
+	Mode     string            `json:"mode"`
+	Messages []*MessageOutChat `json:"messages"`
+}
+
+func (*MessageOutRestored) isMessageOut() {}
