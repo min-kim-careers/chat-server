@@ -47,10 +47,6 @@ func NewRoom(hub *Hub, id string) *Room {
 	return r
 }
 
-func (r *Room) getCacheSize() int64 {
-	return r.hub.svc.Message.GetCachedChatMessagesSize(r.ctx, r.id)
-}
-
 func (r *Room) touch() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -81,7 +77,6 @@ func (r *Room) unregisterClient(c *Client) {
 
 	if _, exists := r.clients[c.id]; exists {
 		delete(r.clients, c.id)
-		c.room = nil
 		log.Printf("Client <%s> left room <%s>.", c.id, r.id)
 		if c.channel != nil {
 			p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
@@ -147,10 +142,6 @@ func (r *Room) handleClose() {
 	r.clientRegister = nil
 	close(r.clientUnregister)
 	r.clientUnregister = nil
-}
-
-func (r *Room) flushRoom() {
-	// set key expiry after flushing
 }
 
 func (r *Room) run() {

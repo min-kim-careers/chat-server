@@ -5,11 +5,8 @@ import (
 	"chat-server/internal/dto/messageout"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,42 +16,44 @@ type CacheChatMessageParams struct {
 	Content  string
 }
 
-func (s *MessageService) CacheChatMessage(ctx context.Context, arg CacheChatMessageParams) (*cache.MessageCache, error) {
-	newID, err := uuid.NewUUID()
-	if err != nil {
-		return nil, err
-	}
-	_roomID, err := uuid.Parse(arg.RoomID)
-	if err != nil {
-		return nil, err
-	}
-
-	t := time.Now()
-
-	c := &cache.MessageCache{
-		ID:        newID,
-		Mode:      "chat",
-		RoomID:    _roomID,
-		ClientID:  arg.ClientID,
-		Content:   arg.Content,
-		CreatedAt: t,
-		Read:      false,
-		Sent:      true,
-	}
-	p, err := json.Marshal(c)
-	if err != nil {
-		return nil, err
-	}
-	err = s.c.Client.ZAdd(ctx, msgKey(arg.RoomID), redis.Z{
-		Score:  float64(t.UnixNano()),
-		Member: p,
+func (s *MessageService) CacheChatMessage(ctx context.Context, key string, v map[string]any) error {
+	return s.c.Client.XAdd(ctx, &redis.XAddArgs{
+		Stream: key,
+		Values: v,
 	}).Err()
+}
+
+func (s *MessageService) PersistChatMessage(ctx context.Context, v map[string]any) error {
+	return s.c.Client.XAdd(ctx, &redis.XAddArgs{
+		Stream: cache.PersistStreamKey(),
+		Values: v,
+	}).Err()
+}
+
+func (s *MessageService) CacheAndPersistChatMessage(ctx context.Context, arg CacheChatMessageParams) (*cache.CacheMessage, error) {
+	m, err := cache.NewCacheMessage(arg.RoomID, arg.ClientID, arg.Content)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Println("Cached:", c)
-	return c, nil
+	v := cache.ToCacheMessageValue(m)
+
+	err = s.CacheChatMessage(ctx, cache.CacheStreamKey(arg.RoomID), v)
+	if err != nil {
+		log.Println("error caching:", err)
+	} else {
+		log.Println("Cached")
+	}
+
+	err = s.PersistChatMessage(ctx, v)
+	if err != nil {
+		log.Println("error persisting:", err)
+	} else {
+		log.Println("Persisted")
+	}
+
+	log.Println(m)
+	return m, nil
 }
 
 type PublishMessageParams struct {
@@ -69,7 +68,7 @@ func (s *MessageService) PublishMessage(ctx context.Context, roomID string, m me
 	if err != nil {
 		return err
 	}
-	err = s.c.Client.Publish(ctx, msgKey(roomID), p).Err()
+	err = s.c.Client.Publish(ctx, cache.CacheStreamKey(roomID), p).Err()
 	if err != nil {
 		return err
 	}
@@ -79,47 +78,56 @@ func (s *MessageService) PublishMessage(ctx context.Context, roomID string, m me
 }
 
 type GetCachedChatMessagesParams struct {
-	ClientID string
-	RoomID   string
-	Before   time.Time
-	Limit    int64
+	ClientID    string
+	RoomID      string
+	Limit       int64
+	LastCacheID string
 }
 
-func (s *MessageService) GetCachedMessages(
+func (s *MessageService) GetCachedChatMessages(
 	ctx context.Context,
 	arg GetCachedChatMessagesParams,
 
-) ([]*messageout.MessageOutChat, error) {
-	rows, err := s.c.Client.ZRevRangeByScore(ctx, msgKey(arg.RoomID), &redis.ZRangeBy{
-		Max:   fmt.Sprintf("(%d", arg.Before.UnixNano()),
-		Min:   "-inf",
-		Count: arg.Limit,
+) ([]*messageout.MessageOutChat, *string, error) {
+	msgs, err := s.c.Client.XRead(ctx, &redis.XReadArgs{
+		Streams: []string{cache.CacheStreamKey(arg.RoomID), arg.LastCacheID},
+		Count:   arg.Limit,
+		Block:   0,
 	}).Result()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if len(rows) == 0 {
-		return []*messageout.MessageOutChat{}, nil
+	if len(msgs) == 0 {
+		return []*messageout.MessageOutChat{}, nil, nil
 	}
 
-	dtos := make([]*messageout.MessageOutChat, len(rows))
-	for i, r := range rows {
-		dto, err := cacheToMessageOut(r, arg.ClientID)
+	var lastCacheID string
+	dtos := make([]*messageout.MessageOutChat, len(msgs))
+	for i, m := range msgs[0].Messages {
+		dto, err := cacheToMessageOutChat(m.Values, arg.ClientID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		dtos[i] = dto
+		if i == len(msgs[0].Messages) {
+			lastCacheID = m.ID
+		}
 	}
 
-	return dtos, nil
+	return dtos, &lastCacheID, nil
 }
 
-func (s *MessageService) GetCachedChatMessagesSize(ctx context.Context, roomID string) int64 {
-	card, err := s.c.Client.ZCard(ctx, msgKey(roomID)).Result()
+func (s *MessageService) GetChatMessagePersistStream(ctx context.Context, workerID string, roomID string) ([]redis.XStream, error) {
+	msgs, err := s.c.Client.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    cache.PersistGroupKey(),
+		Consumer: workerID,
+		Streams:  []string{cache.CacheStreamKey(roomID), ">"},
+		Count:    10,
+		Block:    0,
+	}).Result()
 	if err != nil {
-		log.Println("error getting cache size:", err)
-		return -1
+		return []redis.XStream{}, err
 	}
-	return card
+	return msgs, nil
 }

@@ -6,6 +6,7 @@ import (
 	"chat-server/internal/dto/messageout"
 	"chat-server/internal/dto/roomout"
 	"chat-server/internal/helper"
+	"encoding/json"
 
 	"github.com/google/uuid"
 )
@@ -26,7 +27,7 @@ func dbToRoomOut(r gen.Room) *roomout.RoomOut {
 	}
 }
 
-func dbToMessageOut(m gen.Message, clientID string) *messageout.MessageOutChat {
+func dbToMessageOutChat(m gen.Message, clientID string) *messageout.MessageOutChat {
 	return &messageout.MessageOutChat{
 		Mode:      "chat",
 		ID:        *helper.ToDTOUUID(m.ID),
@@ -37,19 +38,24 @@ func dbToMessageOut(m gen.Message, clientID string) *messageout.MessageOutChat {
 	}
 }
 
-func cacheToMessageOut(p string, clientID string) (*messageout.MessageOutChat, error) {
-	c, err := cache.ToMessageCache(p)
+func cacheToMessageOutChat(s map[string]any, clientID string) (*messageout.MessageOutChat, error) {
+	p, err := json.Marshal(s)
 	if err != nil {
 		return nil, err
 	}
+
+	var c *cache.CacheMessage
+	err = json.Unmarshal(p, &c)
+	if err != nil {
+		return nil, err
+	}
+
 	m := &messageout.MessageOutChat{
-		Mode:      c.Mode,
+		Mode:      "chat",
 		ID:        c.ID,
 		CreatedAt: c.CreatedAt,
 		Content:   c.Content,
 		IsMine:    c.ClientID == clientID,
-		Read:      c.Read,
-		Sent:      c.Sent,
 	}
 	return m, nil
 }

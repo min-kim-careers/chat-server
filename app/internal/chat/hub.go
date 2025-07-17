@@ -1,12 +1,13 @@
 package chat
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"maps"
 	"sync"
-	"time"
 
-	"chat-server/internal/constant"
+	"chat-server/internal/cache"
 	"chat-server/internal/dto/messageout"
 	"chat-server/internal/service"
 )
@@ -121,35 +122,46 @@ func (h *Hub) getRoomsSnapshot() map[string]*Room {
 	return snap
 }
 
-func (h *Hub) handleFlush() {
-	interval := 5 * time.Second
-	delay := 5 * time.Second
+func (h *Hub) handlePersist(parentCtx context.Context, workerID string) {
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		now := time.Now()
-		for _, r := range h.getRoomsSnapshot() {
-			h.mu.Lock()
-			age := now.Sub(r.lastActivity)
-			h.mu.Unlock()
-
-			if age < delay {
-				continue
-			}
-
-			if r.getCacheSize() < constant.CACHE_LIMIT {
-				continue
-			}
-
-			r.flushRoom()
+	for _, r := range h.getRoomsSnapshot() {
+		msgs, err := h.svc.Message.GetChatMessagePersistStream(ctx, workerID, r.id)
+		if err != nil {
+			log.Printf("error getting persist stream for room <%s>: %v", r.id, err)
+			continue
 		}
+
+		cachedMsgs := make([]cache.CacheMessage, len(msgs))
+		for i, m := range msgs[0].Messages {
+			c, err := cache.StreamToCacheMessage(m.Values)
+			if err != nil {
+				log.Printf("error parsing stream to cache <%s>: %v", m.Values, err)
+				break
+			}
+			cachedMsgs[i] = *c
+		}
+		if len(cachedMsgs) == len(msgs) {
+			err = h.svc.Message.FlushCachedMessagesToDB(ctx, cachedMsgs)
+			if err != nil {
+				log.Printf("error persisting room <%s>", r.id)
+				continue
+			}
+		}
+	}
+}
+
+func (h *Hub) startPersistWorkers(numWorkers int) {
+	parentCtx := context.Background()
+	for i := range numWorkers {
+		workerID := fmt.Sprintf("worker-%d", i)
+		go h.handlePersist(parentCtx, workerID)
 	}
 }
 
 func (h *Hub) Run() {
 	go h.handleRoomRegistrations()
 	go h.handleClientRegistrations()
-	go h.handleFlush()
+	go h.startPersistWorkers(1)
 }

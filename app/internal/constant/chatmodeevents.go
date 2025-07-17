@@ -2,6 +2,7 @@ package constant
 
 var ChatModeEvents = map[string]string{
 	"connected":  "connected",
+	"restore":    "restore",
 	"restored":   "restored",
 	"joined":     "joined",
 	"left":       "left",

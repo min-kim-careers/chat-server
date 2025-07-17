@@ -31,15 +31,22 @@ func NewMessageService(r *repo.MessageRepo, db *db.DB, c *cache.Cache) *MessageS
 	}
 }
 
-func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, createdAt time.Time, limit int, clientID string) ([]*messageout.MessageOutChat, error) {
-	if roomID == uuid.Nil || createdAt.IsZero() || limit < 1 {
+type GetDBMessagesParams struct {
+	RoomID    uuid.UUID
+	CreatedAt time.Time
+	Limit     int
+	ClientID  string
+}
+
+func (s *MessageService) GetDBMessages(ctx context.Context, arg GetDBMessagesParams) ([]*messageout.MessageOutChat, error) {
+	if arg.RoomID == uuid.Nil || arg.CreatedAt.IsZero() || arg.Limit < 1 {
 		return nil, errors.New("invalid params")
 	}
 
 	rows, err := s.r.GetMessages(ctx, gen.GetMessagesBeforeCreatedAtParams{
-		RoomID:    helper.ToDBUUID(roomID),
-		CreatedAt: pgtype.Timestamp{Time: createdAt, Valid: true},
-		Limit:     int32(limit),
+		RoomID:    helper.ToDBUUID(arg.RoomID),
+		CreatedAt: pgtype.Timestamp{Time: arg.CreatedAt, Valid: true},
+		Limit:     int32(arg.Limit),
 	})
 	if err != nil {
 		return nil, err
@@ -47,34 +54,27 @@ func (s *MessageService) GetDBMessages(ctx context.Context, roomID uuid.UUID, cr
 
 	dtos := make([]*messageout.MessageOutChat, len(rows))
 	for i, r := range rows {
-		dtos[len(dtos)-1-i] = dbToMessageOut(r, clientID)
+		dtos[len(dtos)-1-i] = dbToMessageOutChat(r, arg.ClientID)
 	}
 
-	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), roomID)
+	log.Printf("Fetched %d messages from DB for room <%s>.", len(dtos), arg.RoomID)
 	return dtos, nil
 }
 
-func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, roomID string, clientID string, cacheSize int64) error {
-	// rows := s.c.Range(ctx, roomMsgKey(roomID), cacheSize)
-	rows := []string{}
-	if len(rows) == 0 {
+func (s *MessageService) FlushCachedMessagesToDB(ctx context.Context, cachedMsgs []cache.CacheMessage) error {
+	if len(cachedMsgs) == 0 {
 		return nil
 	}
 
-	cached := make([]gen.BulkInsertMessagesParams, len(rows))
-	for i, r := range rows {
-		c, err := cache.ToMessageCache(r)
-		if err != nil {
-			log.Printf("error parsing cache rows")
-			return err
-		}
+	cached := make([]gen.BulkInsertMessagesParams, len(cachedMsgs))
+	for i, c := range cachedMsgs {
 		cached[i] = gen.BulkInsertMessagesParams{
 			ID:        helper.ToDBUUID(c.ID),
 			RoomID:    helper.ToDBUUID(c.RoomID),
 			ClientID:  c.ClientID,
 			CreatedAt: helper.ToDBTimestamp(c.CreatedAt),
 			Content:   c.Content,
-			Read:      c.Read,
+			Read:      false,
 		}
 	}
 
