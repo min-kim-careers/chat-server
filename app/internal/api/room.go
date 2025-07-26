@@ -11,16 +11,16 @@ import (
 )
 
 func RegisterRoomRoutes(rg *gin.RouterGroup, s *service.Services) {
-	rg.POST("/rooms/register", func(c *gin.Context) {
+	rg.POST("/room/register", func(c *gin.Context) {
 		registerRoom(c, s)
 	})
 
-	rg.GET("/rooms/client/:clientID", func(c *gin.Context) {
-		getRoomsByClient(c, s)
+	rg.GET("/rooms/clientId/:clientID", func(c *gin.Context) {
+		getRoomsByClientID(c, s)
 	})
 
-	rg.DELETE("/rooms/roomSlug/:roomSlug", func(c *gin.Context) {
-		deleteRoomById(c, s)
+	rg.DELETE("/room/roomSlug/:roomSlug", func(c *gin.Context) {
+		deleteRoomBySlug(c, s)
 	})
 }
 
@@ -54,7 +54,7 @@ func registerRoom(c *gin.Context, s *service.Services) {
 	}})
 }
 
-func getRoomsByClient(c *gin.Context, s *service.Services) {
+func getRoomsByClientID(c *gin.Context, s *service.Services) {
 	clientID := c.Param("clientID")
 	_clientID, err := uuid.Parse(clientID)
 	if err != nil {
@@ -75,7 +75,7 @@ func getRoomsByClient(c *gin.Context, s *service.Services) {
 	}})
 }
 
-func deleteRoomById(c *gin.Context, s *service.Services) {
+func deleteRoomBySlug(c *gin.Context, s *service.Services) {
 	roomSlug := c.Param("roomSlug")
 	roomID := helper.RoomSlugToID(roomSlug)
 	if roomID == nil {
