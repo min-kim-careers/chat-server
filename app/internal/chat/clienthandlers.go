@@ -64,7 +64,9 @@ func (c *Client) handleJoin(m *messagein.MessageInJoin) {
 		return
 	}
 
+	c.mu.Lock()
 	room, exists := c.hub.getRoom(m.RoomID.String())
+	c.mu.Unlock()
 	if exists {
 		room.clientRegister <- c
 		c.setRoom(room)
@@ -157,15 +159,27 @@ func (c *Client) handleRestore() {
 		c.cursor.NoMessages = true
 	}
 
-	p, err := messageout.ToRawMessageOut(&messageout.MessageOutRestored{
-		Mode:     "restored",
-		Messages: restoredMsgs,
-	})
-	if err != nil {
-		log.Println("error:", err)
-		return
+	var p []byte
+	if len(restoredMsgs) == 0 {
+		if p, err = messageout.ToRawMessageOut(&messageout.MessageOutEvent{
+			Mode: "no_messages",
+		}); err != nil {
+			log.Println("error:", err)
+			return
+		}
+	} else {
+		if p, err = messageout.ToRawMessageOut(&messageout.MessageOutRestored{
+			Mode:     "restored",
+			Messages: restoredMsgs,
+		}); err != nil {
+			log.Println("error:", err)
+			return
+		}
 	}
-	c.channel <- p
+
+	if c.channel != nil {
+		c.channel <- p
+	}
 }
 
 func (c *Client) handleTyping() {

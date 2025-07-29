@@ -47,44 +47,45 @@ func NewRoom(hub *Hub, id string) *Room {
 }
 
 func (r *Room) setClient(c *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	r.clients[c.id] = c
+	c.setRoom(r)
 }
 
 func (r *Room) deleteClient(c *Client) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	delete(r.clients, c.id)
 }
 
 func (r *Room) touch() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	r.lastActivity = time.Now()
 }
 
 func (r *Room) registerClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.setClient(c)
-	c.setRoom(r)
 	log.Printf("client <%s> joined room <%s>.", c.id, r.id)
-	p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
-		Mode: "joined",
-	})
-	if err != nil {
-		log.Println("error:", err)
-		return
+
+	if c.channel != nil {
+		p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
+			Mode: "joined",
+		})
+		if err != nil {
+			log.Println("error:", err)
+			return
+		}
+		c.channel <- p
 	}
-	c.channel <- p
 }
 
 func (r *Room) unregisterClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if _, exists := r.clients[c.id]; exists {
 		r.deleteClient(c)
 		log.Printf("client <%s> left room <%s>.", c.id, r.id)
+
 		if c.channel != nil {
 			p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 				Mode: "left",
@@ -130,12 +131,10 @@ func (r *Room) handleClients() {
 	for data := range r.pubsub.Channel() {
 		r.touch()
 		p := []byte(data.Payload)
-		// clientID := helper.GetFieldValue(p, "clientId")
 		for _, c := range r.clients {
-			// if c.id == string(clientID) {
-			// 	continue
-			// }
-			c.channel <- p
+			if c.channel != nil {
+				c.channel <- p
+			}
 		}
 	}
 
