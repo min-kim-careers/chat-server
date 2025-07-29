@@ -4,6 +4,7 @@ import (
 	"chat-server/internal/dto/messagein"
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -32,6 +33,7 @@ type Client struct {
 	conn      *websocket.Conn
 	channel   chan []byte
 	cursor    RestoreCursor
+	mu        sync.Mutex
 }
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
