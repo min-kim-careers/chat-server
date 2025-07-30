@@ -49,7 +49,6 @@ func initDBPool(ctx context.Context) *pgxpool.Pool {
 
 	dbConfig, err := pgxpool.ParseConfig(dbConnStr)
 	if err != nil {
-		log.Println("error:", err)
 		log.Fatal("Failed to create a config:", err)
 	}
 
@@ -76,7 +75,6 @@ func initDBPool(ctx context.Context) *pgxpool.Pool {
 
 	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
-		log.Println("error:", err)
 		log.Fatal("error while creating a DB pool:", err)
 	}
 
@@ -89,7 +87,6 @@ var messageSQL string
 func (d *DB) RunMessageSchemaSQL(ctx context.Context) {
 	_, err := d.DBPool.Exec(ctx, messageSQL)
 	if err != nil {
-		log.Println("error:", err)
 		log.Fatalf("error creating message table: %v", err)
 	}
 }
@@ -100,7 +97,6 @@ var roomSQL string
 func (d *DB) RunRoomSchemaSQL(ctx context.Context) {
 	_, err := d.DBPool.Exec(ctx, roomSQL)
 	if err != nil {
-		log.Println("error:", err)
 		log.Fatalf("error creating room table: %v", err)
 	}
 }

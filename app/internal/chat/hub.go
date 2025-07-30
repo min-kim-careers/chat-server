@@ -16,7 +16,7 @@ type Hub struct {
 	clients           map[string]*Client
 	clientRegister    chan *Client
 	clientUnregister  chan *Client
-	persistWorkerPool *PersistWorkerPool
+	persistWorkerPool *HubPersistWorkerPool
 	mu                sync.Mutex
 }
 
@@ -29,7 +29,7 @@ func NewHub(svc *service.Services) *Hub {
 		clients:           make(map[string]*Client),
 		clientRegister:    make(chan *Client),
 		clientUnregister:  make(chan *Client),
-		persistWorkerPool: NewPersistWorkerPool(svc),
+		persistWorkerPool: NewHubPersistWorkerPool(svc),
 	}
 }
 
@@ -40,6 +40,10 @@ func (h *Hub) HandleNewClient(c *Client) {
 func (h *Hub) getRoom(roomID string) (*Room, bool) {
 	room, exists := h.rooms[roomID]
 	return room, exists
+}
+
+func (h *Hub) addRoom(roomID string) {
+
 }
 
 func (h *Hub) setClient(c *Client) {
@@ -89,7 +93,7 @@ func (h *Hub) registerClient(c *Client) {
 		log.Println("error:", err)
 		return
 	}
-	c.channel <- p
+	c.outbound <- p
 }
 
 func (h *Hub) unregisterClient(c *Client) {
@@ -99,28 +103,6 @@ func (h *Hub) unregisterClient(c *Client) {
 	if _, exists := h.clients[c.id]; exists {
 		h.deleteClient(c)
 		log.Printf("client <%s> unregistered from hub.", c.id)
-	}
-}
-
-func (h *Hub) handleRoomRegistrations() {
-	for {
-		select {
-		case r := <-h.roomRegister:
-			h.registerRoom(r)
-		case r := <-h.roomUnregister:
-			h.unregisterRoom(r)
-		}
-	}
-}
-
-func (h *Hub) handleClientRegistrations() {
-	for {
-		select {
-		case c := <-h.clientRegister:
-			h.registerClient(c)
-		case c := <-h.clientUnregister:
-			h.unregisterClient(c)
-		}
 	}
 }
 

@@ -1,9 +1,7 @@
 package chat
 
 import (
-	"chat-server/internal/dto/messagein"
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -25,30 +23,40 @@ func DefaultRestoreCursor() RestoreCursor {
 }
 
 type Client struct {
-	hub       *Hub
-	room      *Room
-	id        string
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	conn      *websocket.Conn
-	channel   chan []byte
-	cursor    RestoreCursor
-	mu        sync.Mutex
+	hub          *Hub
+	room         *Room
+	id           string
+	ctx          context.Context
+	ctxCancel    context.CancelFunc
+	wg           sync.WaitGroup
+	conn         *websocket.Conn
+	outbound     chan []byte
+	inbound      chan []byte
+	cursor       RestoreCursor
+	lastActivity time.Time
+	mu           sync.Mutex
 }
 
 func NewClient(conn *websocket.Conn, id string, hub *Hub) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Client{
-		hub:       hub,
-		id:        id,
-		ctx:       ctx,
-		ctxCancel: cancel,
-		conn:      conn,
-		cursor:    DefaultRestoreCursor(),
-		channel:   make(chan []byte),
+		hub:          hub,
+		id:           id,
+		ctx:          ctx,
+		ctxCancel:    cancel,
+		wg:           sync.WaitGroup{},
+		conn:         conn,
+		cursor:       DefaultRestoreCursor(),
+		lastActivity: time.Now(),
+		outbound:     make(chan []byte),
+		inbound:      make(chan []byte),
 	}
 	c.run()
 	return c
+}
+
+func (c *Client) touch() {
+	c.lastActivity = time.Now()
 }
 
 func (c *Client) resetCursor() {
@@ -67,73 +75,34 @@ func (c *Client) setRoom(r *Room) {
 	c.room = r
 }
 
-// send to client/browser
-func (c *Client) send() {
-	for p := range c.channel {
-		err := c.conn.WriteMessage(websocket.TextMessage, p)
-		if err != nil {
-			log.Println("error:", err)
-			log.Printf("error sending message to client <%s>: %v", c.id, err)
-			c.ctxCancel()
-			return
-		}
-		log.Printf("sent to client <%s>: %v", c.id, string(p))
-	}
-
-}
-
-// read from client/browser
-func (c *Client) read() {
-	for {
-		_, p, err := c.conn.ReadMessage()
-		if err != nil {
-			log.Println("error:", err)
-			log.Printf("error reading message: %v", err)
-			c.ctxCancel()
-			return
-		}
-
-		m, err := messagein.ToMessageIn(p)
-		if err != nil {
-			log.Println("error:", err)
-			log.Printf("error parsing message in: %v", err)
-			continue
-		}
-
-		switch v := m.(type) {
-		case *messagein.MessageInChat:
-			c.handleChat(v)
-		case *messagein.MessageInJoin:
-			c.handleJoin(v)
-
-		case *messagein.MessageInEvent:
-			switch v.Mode {
-			case "restore":
-				if c.hasNoMessages() {
-					c.handleNoMessages()
-				} else {
-					c.handleRestore()
-				}
-			case "leave":
-				c.handleLeave()
-			case "typing":
-				c.handleTyping()
-			case "not_typing":
-				c.handleNotTyping()
-			}
-		}
-	}
-}
-
-func (c *Client) handleClose() {
-	<-c.ctx.Done()
-	c.handleDisconnect()
-	close(c.channel)
-	c.channel = nil
-}
-
 func (c *Client) run() {
-	go c.read()
-	go c.send()
-	go c.handleClose()
+	var wg sync.WaitGroup
+
+	wg.Add(5)
+
+	go func() {
+		defer wg.Done()
+		c.handleInbound()
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.handleOutbound()
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.handleMessages()
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.handleIdleTimeout()
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.handleClose()
+	}()
+
 }

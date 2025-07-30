@@ -4,8 +4,6 @@ import (
 	"chat-server/internal/helper"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
 )
 
 func ToMessageIn(p []byte) (MessageIn, error) {
@@ -14,18 +12,8 @@ func ToMessageIn(p []byte) (MessageIn, error) {
 		return nil, err
 	}
 
-	isEvent, err := validateMessageIn(&b)
-	if err != nil {
-		log.Println("error:", err)
+	if err := validateMessageIn(&b); err != nil {
 		return nil, err
-	}
-
-	if isEvent {
-		var e MessageInEvent
-		if err := json.Unmarshal(p, &e); err != nil {
-			return nil, err
-		}
-		return &e, nil
 	}
 
 	switch b.Mode {
@@ -49,7 +37,11 @@ func ToMessageIn(p []byte) (MessageIn, error) {
 		j.RoomID = roomID
 		return &j, nil
 
+	default:
+		var e MessageInEvent
+		if err := json.Unmarshal(p, &e); err != nil {
+			return nil, err
+		}
+		return &e, nil
 	}
-
-	return nil, fmt.Errorf("unknown type %s", b.Mode)
 }

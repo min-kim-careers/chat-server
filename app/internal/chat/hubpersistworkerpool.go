@@ -11,37 +11,37 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type PersistWorkerPool struct {
+type HubPersistWorkerPool struct {
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 	persistChan chan []redis.XMessage
 	svc         *service.Services
-	workers     []*PersistWorker
+	workers     []*HubPersistWorker
 	mu          sync.Mutex
 }
 
-func NewPersistWorkerPool(svc *service.Services) *PersistWorkerPool {
+func NewHubPersistWorkerPool(svc *service.Services) *HubPersistWorkerPool {
 	ctx, cancel := context.WithCancel(context.Background())
-	p := &PersistWorkerPool{
+	p := &HubPersistWorkerPool{
 		ctx:         ctx,
 		ctxCancel:   cancel,
 		persistChan: make(chan []redis.XMessage),
 		svc:         svc,
-		workers:     []*PersistWorker{},
+		workers:     []*HubPersistWorker{},
 	}
 	p.run()
 	return p
 }
 
-func (wp *PersistWorkerPool) addWorker() {
+func (wp *HubPersistWorkerPool) addWorker() {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 
-	w := NewPersistWorker(wp.ctx, wp.persistChan, wp.svc)
+	w := NewHubPersistWorker(wp.ctx, wp.persistChan, wp.svc)
 	wp.workers = append(wp.workers, w)
 }
 
-func (wp *PersistWorkerPool) removeWorker() {
+func (wp *HubPersistWorkerPool) removeWorker() {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 
@@ -49,14 +49,14 @@ func (wp *PersistWorkerPool) removeWorker() {
 	wp.workers = wp.workers[:len(wp.workers)-1]
 }
 
-func (wp *PersistWorkerPool) workerCount() int {
+func (wp *HubPersistWorkerPool) workerCount() int {
 	wp.mu.Lock()
 	defer wp.mu.Unlock()
 
 	return len(wp.workers)
 }
 
-func (wp *PersistWorkerPool) handleCacheStream() {
+func (wp *HubPersistWorkerPool) handleCacheStream() {
 	for {
 		stream, err := wp.svc.Message.GetCacheMessageStream(wp.ctx, 10, 0)
 		if err != nil {
@@ -69,7 +69,7 @@ func (wp *PersistWorkerPool) handleCacheStream() {
 	}
 }
 
-func (wp *PersistWorkerPool) handleWorkerLoad() {
+func (wp *HubPersistWorkerPool) handleWorkerLoad() {
 	wp.addWorker()
 
 	ticker := time.NewTicker(constants.PERSIST_PENDING_CHECK_INTERVAL)
@@ -93,7 +93,7 @@ func (wp *PersistWorkerPool) handleWorkerLoad() {
 	}
 }
 
-func (wp *PersistWorkerPool) run() {
+func (wp *HubPersistWorkerPool) run() {
 	go wp.handleCacheStream()
 	go wp.handleWorkerLoad()
 }
