@@ -12,7 +12,7 @@ func ToRawMessageIn(m MessageIn) ([]byte, error) {
 		return nil, errors.New("wrong message in type")
 	}
 
-	if _, err := validateMessageIn(v); err != nil {
+	if err := validateMessageIn(v); err != nil {
 		return nil, err
 	}
 

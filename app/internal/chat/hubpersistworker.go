@@ -9,16 +9,16 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type PersistWorker struct {
+type HubPersistWorker struct {
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 	persistChan chan []redis.XMessage
 	svc         *service.Services
 }
 
-func NewPersistWorker(parentCtx context.Context, persistChan chan []redis.XMessage, svc *service.Services) *PersistWorker {
+func NewHubPersistWorker(parentCtx context.Context, persistChan chan []redis.XMessage, svc *service.Services) *HubPersistWorker {
 	ctx, cancel := context.WithCancel(parentCtx)
-	p := &PersistWorker{
+	p := &HubPersistWorker{
 		ctx:         ctx,
 		ctxCancel:   cancel,
 		persistChan: persistChan,
@@ -28,7 +28,7 @@ func NewPersistWorker(parentCtx context.Context, persistChan chan []redis.XMessa
 	return p
 }
 
-func (p *PersistWorker) handlePersist() {
+func (p *HubPersistWorker) handlePersist() {
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -56,6 +56,6 @@ func (p *PersistWorker) handlePersist() {
 	}
 }
 
-func (p *PersistWorker) run() {
+func (p *HubPersistWorker) run() {
 	go p.handlePersist()
 }

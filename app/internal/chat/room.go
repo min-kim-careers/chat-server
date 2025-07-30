@@ -5,7 +5,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -19,7 +18,6 @@ type Room struct {
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
 	pubsub           *redis.PubSub
-	lastActivity     time.Time
 	mu               sync.Mutex
 }
 
@@ -39,34 +37,31 @@ func NewRoom(hub *Hub, id string) *Room {
 		clientUnregister: make(chan *Client),
 		ctx:              ctx,
 		ctxCancel:        cancel,
-		lastActivity:     time.Now(),
 		pubsub:           pubsub,
 	}
 	r.run()
 	return r
 }
 
-func (r *Room) setClient(c *Client) {
+func (r *Room) addClient(c *Client) {
 	r.clients[c.id] = c
 	c.setRoom(r)
+	log.Printf("client <%s> joined room <%s>.", c.id, r.id)
 }
 
 func (r *Room) deleteClient(c *Client) {
 	delete(r.clients, c.id)
-}
-
-func (r *Room) touch() {
-	r.lastActivity = time.Now()
+	c.setRoom(nil)
+	log.Printf("client <%s> left room <%s>.", c.id, r.id)
 }
 
 func (r *Room) registerClient(c *Client) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.setClient(c)
-	log.Printf("client <%s> joined room <%s>.", c.id, r.id)
+	r.addClient(c)
 
-	if c.channel != nil {
+	if c.outbound != nil {
 		p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 			Mode: "joined",
 		})
@@ -74,7 +69,7 @@ func (r *Room) registerClient(c *Client) {
 			log.Println("error:", err)
 			return
 		}
-		c.channel <- p
+		c.outbound <- p
 	}
 }
 
@@ -84,9 +79,15 @@ func (r *Room) unregisterClient(c *Client) {
 
 	if _, exists := r.clients[c.id]; exists {
 		r.deleteClient(c)
-		log.Printf("client <%s> left room <%s>.", c.id, r.id)
 
-		if c.channel != nil {
+		if len(r.clients) == 0 {
+			log.Printf("Room <%s> is empty. Requesting removal from hub.", r.id)
+			r.hub.roomUnregister <- r
+			r.ctxCancel()
+			return
+		}
+
+		if c.outbound != nil {
 			p, err := messageout.ToRawMessageOut(&messageout.MessageOutEvent{
 				Mode: "left",
 			})
@@ -94,64 +95,29 @@ func (r *Room) unregisterClient(c *Client) {
 				log.Println("error:", err)
 				return
 			}
-			c.channel <- p
+			c.outbound <- p
 		}
 	}
 
-	if len(r.clients) == 0 {
-		log.Printf("Room <%s> is empty. Requesting removal from hub.", r.id)
-		r.hub.roomUnregister <- r
-		r.ctxCancel()
-		return
-	}
-}
-
-func (r *Room) handleRegistrations() {
-	for {
-		select {
-		case c, ok := <-r.clientRegister:
-			if ok {
-				r.registerClient(c)
-			}
-		case c, ok := <-r.clientUnregister:
-			if ok {
-				r.unregisterClient(c)
-			}
-		}
-
-		if r.clientRegister == nil && r.clientUnregister == nil {
-			return
-		}
-	}
-}
-
-func (r *Room) handleClients() {
-	defer r.pubsub.Close()
-
-	for data := range r.pubsub.Channel() {
-		r.touch()
-		p := []byte(data.Payload)
-		for _, c := range r.clients {
-			if c.channel != nil {
-				c.channel <- p
-			}
-		}
-	}
-
-}
-
-func (r *Room) handleClose() {
-	<-r.ctx.Done()
-	r.pubsub.Close()
-	r.pubsub = nil
-	close(r.clientRegister)
-	r.clientRegister = nil
-	close(r.clientUnregister)
-	r.clientUnregister = nil
 }
 
 func (r *Room) run() {
-	go r.handleRegistrations()
-	go r.handleClients()
-	go r.handleClose()
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		r.handleClientRegistrations()
+	}()
+
+	go func() {
+		defer wg.Done()
+		r.handleMessages()
+	}()
+
+	go func() {
+		defer wg.Done()
+		r.handleClose()
+	}()
 }

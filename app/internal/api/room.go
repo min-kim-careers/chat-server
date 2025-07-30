@@ -15,11 +15,11 @@ func RegisterRoomRoutes(rg *gin.RouterGroup, s *service.Services) {
 		registerRoom(c, s)
 	})
 
-	rg.GET("/rooms/clientId/:clientID", func(c *gin.Context) {
+	rg.GET("/rooms/client/:clientID", func(c *gin.Context) {
 		getRoomsByClientID(c, s)
 	})
 
-	rg.DELETE("/room/roomSlug/:roomSlug", func(c *gin.Context) {
+	rg.DELETE("/room/room/:roomSlug", func(c *gin.Context) {
 		deleteRoomBySlug(c, s)
 	})
 }
