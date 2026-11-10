@@ -28,11 +28,8 @@ Client ──ws──▶ Room (in-memory fan-out to connected clients)
 ## Stack
 Go 1.23 · gorilla/websocket · Redis Streams · PostgreSQL · Docker Compose · Air (hot reload)
 
-## Run locally
-```bash
-cp .env.example .env    # set any passwords
-docker compose up
-```
+## Running it
+Runs on Docker Compose with PostgreSQL and Redis (see `compose.yml`), with hot reload through Air. Connections are authenticated against an external auth service (`AUTH_URL`), which this repo doesn't include.
 
 ## What I'd improve next
 - Horizontal scaling: fan out across instances through the room streams
