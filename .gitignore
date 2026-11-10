@@ -3,3 +3,4 @@ app/tmp/
 .env*
 !.env.example
 *.key
+!.env*.example
