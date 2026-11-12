@@ -2,7 +2,6 @@
 
 A real-time, multi-room chat server in Go, with fast message delivery and durable message history.
 
-Status: **Active**
 
 ## Why
 To build a chat backend from first principles: concurrent WebSocket clients, catching up on missed messages, and persistence that doesn't slow down delivery.
